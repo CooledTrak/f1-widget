@@ -202,9 +202,14 @@ def main():
         widget_data['status_text'] = f"Hiba: {e}"
         print(f"Végzetes hiba: {e}")
 
+    # TESZT ADAT (Töröld ki, ha elindul a szezon!)
+    if widget_data['last_podium'] == "":
+        widget_data['last_podium'] = "🥇TESZT 🥈ADAT 🥉MŰKÖDIK"
+        
     # VÉGSŐ MENTÉS
     with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(widget_data, f)
     print(f"Widget adat sikeresen frissítve! Progress: {widget_data['progress']}")
 
 if __name__ == "__main__":
     main()
+
