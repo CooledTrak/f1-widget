@@ -69,14 +69,14 @@ def main():
         "progress": 33, # Biztonsági alapérték
         "is_live": 0,
         "live_session": "",
-        "last_podium": "" # ÚJ: Dobogósok helye
+        "last_podium": "" # Dobogósok helye
     }
 
     # 1. KÖVETKEZŐ FUTAM LEKÉRÉSE
     next_data = get_json("https://api.jolpi.ca/ergast/f1/current/next.json")
     
     if not next_data:
-        # Ha nincs internet, mentsük el az alapértelmezettet és lépjünk ki
+        # Ha nincs internet, mentse el az alapértelmezettet és lépjen ki
         with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(widget_data, f)
         print("Hiba: Nem sikerült elérni a next.json-t")
         return
@@ -108,7 +108,7 @@ def main():
 
         sessions.sort(key=lambda x: x["start"])
 
-        # Live ellenőrzés (Zajlik-e épp valami?)
+        # Live ellenőrzés
         is_weekend = False
         for s in sessions:
             if s["start"] <= now <= s["end"]:
@@ -144,7 +144,7 @@ def main():
         
         if last_data:
             try:
-                # 1. Dobogósok kinyerése (NEW)
+                # 1. Dobogósok kinyerése
                 last_race_results = last_data['MRData']['RaceTable']['Races'][0]
                 results = last_race_results.get('Results', [])
                 
