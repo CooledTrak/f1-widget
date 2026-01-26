@@ -7,6 +7,10 @@ from dateutil import parser
 WEATHER_API_KEY = "84352f72e1c7846365290f1afb251a4c"
 JSON_OUTPUT_PATH = "f1_widget_data.json"
 
+# Fix dátumok (ha az API nem működne)
+SEASON_START = datetime(2026, 3, 6, tzinfo=timezone.utc) # 2026-os szezon kezdete
+LAST_SEASON_END = datetime(2025, 12, 8, tzinfo=timezone.utc) # 2025 vége (becslés)
+
 TRACK_MAPS = {
     "albert_park": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Australia_Circuit.png.transform/8col/image.png",
     "bahrain": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Bahrain_Circuit.png.transform/8col/image.png",
@@ -52,20 +56,22 @@ def get_weather(lat, lon):
     return ""
 
 def main():
+    # ALAPÉRTELMEZETT ÉRTÉKEK (Hogy sose legyen üres)
     widget_data = {
         "status_title": "F1 Widget",
         "status_text": "Betöltés...",
         "weather": "",
-        "bg_color": "#FF252525", # Alapból "világosabb" sötétszürke (Hétköznap)
+        "bg_color": "#FF252525",
         "schedule": "",
         "track_map": "",
-        "progress": 0,
-        "is_live": 0, # 0 = Nem live, 1 = LIVE
-        "live_session": "" # Melyik esemény zajlik épp
+        "progress": 33, # Biztonsági alapérték
+        "is_live": 0,
+        "live_session": ""
     }
 
     next_data = get_json("https://api.jolpi.ca/ergast/f1/current/next.json")
     if not next_data:
+        # Ha nincs net, mentsük el az alapértelmezettet
         with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(widget_data, f)
         return
 
@@ -77,16 +83,14 @@ def main():
         
         now = datetime.now(timezone.utc)
         
-        # --- MENETREND ÉS LIVE ÉRZÉKELÉS ---
+        # --- MENETREND ---
         sessions = []
-        # Segédfüggvény az események hozzáadására (név, idő, hossz_percben)
         def add_session(name, date_str, time_str, duration_min):
             start = parser.parse(f"{date_str} {time_str}")
             end = start + timedelta(minutes=duration_min)
             sessions.append({"name": name, "start": start, "end": end})
 
-        # Adatok betöltése (időtartamokkal!)
-        add_session("Futam", race['date'], race['time'], 120) # Futam kb 2 óra
+        add_session("Futam", race['date'], race['time'], 120)
         if 'Qualifying' in race: add_session("Időmérő", race['Qualifying']['date'], race['Qualifying']['time'], 60)
         if 'FirstPractice' in race: add_session("1. Edzés", race['FirstPractice']['date'], race['FirstPractice']['time'], 60)
         if 'SecondPractice' in race: add_session("2. Edzés", race['SecondPractice']['date'], race['SecondPractice']['time'], 60)
@@ -94,36 +98,26 @@ def main():
         if 'Sprint' in race: add_session("Sprint", race['Sprint']['date'], race['Sprint']['time'], 60)
         if 'SprintQualifying' in race: add_session("Sprint Q", race['SprintQualifying']['date'], race['SprintQualifying']['time'], 45)
 
-        # Sorbarendezés
         sessions.sort(key=lambda x: x["start"])
 
         # Live ellenőrzés
-        is_weekend = False # Versenyhétvége van-e (4 napon belül)
-        
+        is_weekend = False
         for s in sessions:
-            # Ha most zajlik bármelyik
             if s["start"] <= now <= s["end"]:
                 widget_data['is_live'] = 1
                 widget_data['live_session'] = s["name"]
                 widget_data['status_text'] = f"LIVE: {s['name'].upper()}"
-                widget_data['bg_color'] = "#FF121212" # Hétvégi sötét háttér (hogy látszódjon a piros keret)
+                widget_data['bg_color'] = "#FF121212"
                 is_weekend = True
                 break
-            
-            # Ha még a jövőben van, de közel (hétvége mód)
             if s["start"] > now:
-                time_diff = s["start"] - now
-                if time_diff.days < 4:
+                if (s["start"] - now).days < 4:
                     is_weekend = True
 
-        # Háttérszín logika
         if widget_data['is_live'] == 0:
-            if is_weekend:
-                widget_data['bg_color'] = "#FF121212" # Hétvége (sötét/fekete)
-            else:
-                widget_data['bg_color'] = "#FF2E2E2E" # Hétköznap/szünet (világosabb szürke)
+            if is_weekend: widget_data['bg_color'] = "#FF121212"
+            else: widget_data['bg_color'] = "#FF2E2E2E"
 
-        # Menetrend szöveg generálás
         schedule_text = ""
         for s in sessions:
             local_time = s["start"].astimezone()
@@ -132,44 +126,62 @@ def main():
             schedule_text += f"{day_name} {time_str} | {s['name']}\n"
         widget_data['schedule'] = schedule_text.strip()
 
-        # Progress bar Számítás
+        # --- PROGRESS BAR (BIZTOSÍTOTT VERZIÓ) ---
+        # 1. Próbáljuk API-ból
         last_data = get_json("https://api.jolpi.ca/ergast/f1/current/last.json")
-        if last_data:
-            last_race = last_data['MRData']['RaceTable']['Races'][0]
-            last_race_time = parser.parse(f"{last_race['date']} {last_race['time']}")
-            # Futam start ideje a sessions listából (az első "Futam" nevű)
-            race_start = next((s["start"] for s in sessions if s["name"] == "Futam"), None)
-            
-            if race_start:
+        race_start = next((s["start"] for s in sessions if s["name"] == "Futam"), None)
+        
+        calculated_progress = None
+        
+        if last_data and race_start:
+            try:
+                last_race = last_data['MRData']['RaceTable']['Races'][0]
+                last_race_time = parser.parse(f"{last_race['date']} {last_race['time']}")
                 total_duration = (race_start - last_race_time).total_seconds()
                 elapsed = (now - last_race_time).total_seconds()
                 if total_duration > 0:
-                    percent = int(max(0, min(100, (elapsed / total_duration) * 100)))
-                    widget_data['progress'] = percent
+                    calculated_progress = int(max(0, min(100, (elapsed / total_duration) * 100)))
+            except:
+                pass # Ha hiba van, majd a backup megoldja
 
-        # Címkék ha nem live
+        # 2. Ha az API nem ment, használjuk a Fix Dátumokat (Backup)
+        if calculated_progress is None and race_start:
+            # Ha nincs előző futam adat, vegyük a fix 2025 végét alapnak
+            total_duration = (race_start - LAST_SEASON_END).total_seconds()
+            elapsed = (now - LAST_SEASON_END).total_seconds()
+            if total_duration > 0:
+                calculated_progress = int(max(0, min(100, (elapsed / total_duration) * 100)))
+        
+        # Érték beállítása
+        if calculated_progress is not None:
+            widget_data['progress'] = calculated_progress
+        else:
+            widget_data['progress'] = 50 # Végső mentsvár
+
+        # --- INFÓK HA NEM LIVE ---
         if widget_data['is_live'] == 0:
             next_sess = next((s for s in sessions if s["start"] > now), None)
             if next_sess:
                 time_left = next_sess["start"] - now
                 days = time_left.days
-                if days < 4: # Közelgő esemény
+                if days < 4:
                     hours, rem = divmod(time_left.seconds, 3600)
                     mins, _ = divmod(rem, 60)
                     widget_data['status_title'] = f"Következő: {next_sess['name']}"
                     widget_data['status_text'] = f"Kezdés: {hours}ó {mins}p múlva"
-                    # Időjárás
                     w = get_weather(race['Circuit']['Location']['lat'], race['Circuit']['Location']['long'])
                     widget_data['weather'] = f"{race['Circuit']['Location']['locality']}: {w}"
-                else: # Távoli futam
+                else:
                     widget_data['status_title'] = f"Következő: {race_name}"
                     widget_data['status_text'] = f"{days} nap van hátra"
 
     except Exception as e:
         widget_data['status_text'] = f"Hiba: {e}"
+        print(f"Végzetes hiba: {e}")
 
+    # MENTÉS ÉS LOGOLÁS
     with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(widget_data, f)
-    print("Widget frissítve! Live:", widget_data['is_live'], "Bg:", widget_data['bg_color'])
+    print(f"Widget adat frissítve! Progress: {widget_data['progress']}")
 
 if __name__ == "__main__":
     main()
