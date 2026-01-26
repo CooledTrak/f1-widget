@@ -1,0 +1,32 @@
+name: Update F1 Data
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Minden órában futtatja
+  workflow_dispatch: # Kézzel is indítható
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Kód letöltése
+        uses: actions/checkout@v4
+
+      - name: Python beállítása
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Csomagok telepítése
+        run: pip install requests python-dateutil
+
+      - name: Script futtatása
+        run: python f1_widget.py
+
+      - name: Adat mentése (Commit)
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Update F1 widget data
+          file_pattern: f1_widget_data.json
