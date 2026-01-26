@@ -7,10 +7,8 @@ from dateutil import parser
 WEATHER_API_KEY = "84352f72e1c7846365290f1afb251a4c"
 JSON_OUTPUT_PATH = "f1_widget_data.json"
 
-# Fix dátumok (ha az API nem működne vagy szezon eleje van)
-# 2026-os szezon kezdete:
+# Fix dátumok
 SEASON_START = datetime(2026, 3, 6, tzinfo=timezone.utc) 
-# 2025 vége (becslés a progress barhoz):
 LAST_SEASON_END = datetime(2025, 12, 8, tzinfo=timezone.utc) 
 
 TRACK_MAPS = {
@@ -58,40 +56,35 @@ def get_weather(lat, lon):
     return ""
 
 def main():
-    # ALAPÉRTELMEZETT ÉRTÉKEK (Hogy sose legyen üres a JSON)
     widget_data = {
         "status_title": "F1 Widget",
-        "status_text": "Betöltés...",
+        "status_text": "",
         "weather": "",
         "bg_color": "#FF252525",
         "schedule": "",
         "track_map": "",
-        "progress": 33, # Biztonsági alapérték
+        "progress": 33,
         "is_live": 0,
         "live_session": "",
-        "last_podium": "" # Dobogósok helye
+        "last_podium": ""
     }
 
     # 1. KÖVETKEZŐ FUTAM LEKÉRÉSE
     next_data = get_json("https://api.jolpi.ca/ergast/f1/current/next.json")
     
     if not next_data:
-        # Ha nincs internet, mentse el az alapértelmezettet és lépjen ki
         with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(widget_data, f)
-        print("Hiba: Nem sikerült elérni a next.json-t")
         return
 
     try:
         race = next_data['MRData']['RaceTable']['Races'][0]
         race_name = race['raceName']
         circuit_id = race['Circuit']['circuitId']
-        
-        # Pályarajz beállítása
         if circuit_id in TRACK_MAPS: widget_data['track_map'] = TRACK_MAPS[circuit_id]
         
         now = datetime.now(timezone.utc)
         
-        # --- MENETREND ÉS LIVE ---
+        # --- MENETREND ---
         sessions = []
         def add_session(name, date_str, time_str, duration_min):
             start = parser.parse(f"{date_str} {time_str}")
@@ -109,25 +102,53 @@ def main():
         sessions.sort(key=lambda x: x["start"])
 
         # Live ellenőrzés
-        is_weekend = False
+        is_weekend_live = False # Ez csak a live színekhez kell
         for s in sessions:
             if s["start"] <= now <= s["end"]:
                 widget_data['is_live'] = 1
                 widget_data['live_session'] = s["name"]
                 widget_data['status_text'] = f"LIVE: {s['name'].upper()}"
                 widget_data['bg_color'] = "#FF121212"
-                is_weekend = True
+                is_weekend_live = True
                 break
-            if s["start"] > now:
-                if (s["start"] - now).days < 4:
-                    is_weekend = True
-
-        # Háttérszín beállítása
+        
+        # --- CÍMEK ÉS VISSZASZÁMLÁLÁS LOGIKA (Módosítva) ---
         if widget_data['is_live'] == 0:
-            if is_weekend: widget_data['bg_color'] = "#FF121212"
-            else: widget_data['bg_color'] = "#FF2E2E2E"
+            first_session_start = sessions[0]["start"] # Általában Péntek
+            
+            # Ellenőrizzük, hogy elértük-e már a hétvégét (Pénteket)
+            # Ha a mai nap dátuma >= az első edzés napjával
+            is_race_weekend_mode = now.date() >= first_session_start.date()
 
-        # Menetrend szöveg generálása
+            if is_race_weekend_mode:
+                # PÉNTEKTŐL VASÁRNAPIG (Hétvége mód)
+                widget_data['status_title'] = race_name # Csak a név (Nincs "Következő")
+                widget_data['status_text'] = "" # Üres visszaszámláló
+                widget_data['bg_color'] = "#FF121212" # Sötétebb háttér
+            else:
+                # HÉTFŐTŐL CSÜTÖRTÖKIG (Várakozás mód)
+                widget_data['status_title'] = f"Következő: {race_name}"
+                widget_data['bg_color'] = "#FF2E2E2E"
+                
+                # Visszaszámláló számítása
+                time_left = first_session_start - now
+                days = time_left.days
+                if days < 0: days = 0 # Biztonsági
+                
+                if days == 0:
+                    # Ha már aznap van, de még nem kezdődött el (pl. Péntek reggel)
+                    hours, rem = divmod(time_left.seconds, 3600)
+                    mins, _ = divmod(rem, 60)
+                    widget_data['status_text'] = f"Kezdés: {hours}ó {mins}p múlva"
+                else:
+                    widget_data['status_text'] = f"{days} nap van hátra"
+
+            # Időjárás (mindig lekérjük, ha 4 napon belül van, de csak ha nincs Live)
+            if (first_session_start - now).days < 4:
+                w = get_weather(race['Circuit']['Location']['lat'], race['Circuit']['Location']['long'])
+                widget_data['weather'] = f"{race['Circuit']['Location']['locality']}: {w}"
+
+        # Menetrend szöveg
         schedule_text = ""
         for s in sessions:
             local_time = s["start"].astimezone()
@@ -136,80 +157,54 @@ def main():
             schedule_text += f"{day_name} {time_str} | {s['name']}\n"
         widget_data['schedule'] = schedule_text.strip()
 
-        # --- PROGRESS BAR ÉS DOBOGÓ ---
+        # --- PROGRESS BAR ---
         last_data = get_json("https://api.jolpi.ca/ergast/f1/current/last.json")
         race_start = next((s["start"] for s in sessions if s["name"] == "Futam"), None)
-        
         calculated_progress = None
         
         if last_data:
             try:
-                # 1. Dobogósok kinyerése
+                # 1. DOBOGÓSOK (NEW - 60 órás szabály: V+H+K)
                 last_race_results = last_data['MRData']['RaceTable']['Races'][0]
                 results = last_race_results.get('Results', [])
-                
-                # Biztonsági ellenőrzés, van-e elég adat
-                if len(results) >= 3:
+                last_race_time = parser.parse(f"{last_race_results['date']} {last_race_results['time']}")
+
+                # 60 óra = 2.5 nap (Vasárnap 16:00 -> Szerda 04:00)
+                elapsed_since_race = (now - last_race_time).total_seconds()
+                is_fresh_result = elapsed_since_race < (60 * 3600)
+
+                if len(results) >= 3 and is_fresh_result:
                     p1 = results[0]['Driver']['code']
                     p2 = results[1]['Driver']['code']
                     p3 = results[2]['Driver']['code']
                     widget_data['last_podium'] = f"🥇{p1} 🥈{p2} 🥉{p3}"
+                else:
+                    widget_data['last_podium'] = ""
 
-                # 2. Progress számítás (API alapján)
+                # 2. PROGRESS
                 if race_start:
-                    last_race_time = parser.parse(f"{last_race_results['date']} {last_race_results['time']}")
                     total_duration = (race_start - last_race_time).total_seconds()
                     elapsed = (now - last_race_time).total_seconds()
                     if total_duration > 0:
                         calculated_progress = int(max(0, min(100, (elapsed / total_duration) * 100)))
             except Exception as e:
-                print(f"Hiba a last.json feldolgozásakor: {e}")
+                print(f"Hiba last data: {e}")
 
-        # Backup Progress logika (Ha az API nem elérhető vagy szezon eleje van)
+        # Backup Progress
         if calculated_progress is None and race_start:
             total_duration = (race_start - LAST_SEASON_END).total_seconds()
             elapsed = (now - LAST_SEASON_END).total_seconds()
             if total_duration > 0:
                 calculated_progress = int(max(0, min(100, (elapsed / total_duration) * 100)))
         
-        # Progress érték mentése
-        if calculated_progress is not None:
-            widget_data['progress'] = calculated_progress
-        else:
-            widget_data['progress'] = 50 
-
-        # --- CÍMEK ÉS IDŐJÁRÁS (Ha nem live) ---
-        if widget_data['is_live'] == 0:
-            next_sess = next((s for s in sessions if s["start"] > now), None)
-            if next_sess:
-                time_left = next_sess["start"] - now
-                days = time_left.days
-                if days < 4:
-                    # Közelgő futam (óra perc)
-                    hours, rem = divmod(time_left.seconds, 3600)
-                    mins, _ = divmod(rem, 60)
-                    widget_data['status_title'] = f"Következő: {next_sess['name']}"
-                    widget_data['status_text'] = f"Kezdés: {hours}ó {mins}p múlva"
-                    # Időjárás lekérése (csak ha közel van)
-                    w = get_weather(race['Circuit']['Location']['lat'], race['Circuit']['Location']['long'])
-                    widget_data['weather'] = f"{race['Circuit']['Location']['locality']}: {w}"
-                else:
-                    # Távoli futam (napok)
-                    widget_data['status_title'] = f"Következő: {race_name}"
-                    widget_data['status_text'] = f"{days} nap van hátra"
+        widget_data['progress'] = calculated_progress if calculated_progress is not None else 50
 
     except Exception as e:
         widget_data['status_text'] = f"Hiba: {e}"
         print(f"Végzetes hiba: {e}")
 
-    # TESZT ADAT (Töröld ki, ha elindul a szezon!)
-    if widget_data['last_podium'] == "":
-        widget_data['last_podium'] = "🥇TESZT 🥈ADAT 🥉MŰKÖDIK"
-        
-    # VÉGSŐ MENTÉS
     with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(widget_data, f)
-    print(f"Widget adat sikeresen frissítve! Progress: {widget_data['progress']}")
+    print(f"Widget adat frissítve! Progress: {widget_data['progress']}")
 
 if __name__ == "__main__":
     main()
-
