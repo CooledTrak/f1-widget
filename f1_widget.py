@@ -47,15 +47,17 @@ def get_json(url):
         print(f"HIBA ({url}): {e}")
         return None
 
-def get_weather(lat, lon):
-    if not WEATHER_API_KEY: return ""
+# ÚJ: Külön adjuk vissza a szöveget és az ikont
+def get_weather_data(lat, lon):
+    if not WEATHER_API_KEY: return None, None
     url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={WEATHER_API_KEY}&units=metric&lang=hu"
     data = get_json(url)
     if data:
         temp = round(data['main']['temp'])
         desc = data['weather'][0]['description']
-        return f"{temp}°C, {desc.capitalize()}"
-    return ""
+        icon = data['weather'][0]['icon'] # Pl. "10d"
+        return f"{temp}°C, {desc.capitalize()}", icon
+    return "", ""
 
 def format_date_range(start_date, end_date):
     months = ["JAN", "FEB", "MÁRC", "ÁPR", "MÁJ", "JÚN", "JÚL", "AUG", "SZEP", "OKT", "NOV", "DEC"]
@@ -71,6 +73,7 @@ def main():
         "location": "",
         "race_dates": "",
         "weather_text": "",
+        "weather_icon": "", # ÚJ MEZŐ AZ IKONNAK
         "status_text": "",
         "bg_color": "#FF252525",
         "schedule": "",
@@ -124,21 +127,18 @@ def main():
         widget_data['location'] = circuit_name.upper()
         widget_data['race_dates'] = format_date_range(first_session, last_session) + f", {first_session.year}"
 
-        # --- IDŐJÁRÁS LOGIKA (HIBRID) ---
-        # Csak akkor kérjünk pálya időjárást, ha a versenyhétvége napjaiban vagyunk
-        # (Első edzés napjától a futam végéig)
+        # --- IDŐJÁRÁS LOGIKA (HIBRID + IKON) ---
         is_race_weekend_weather = first_session.date() <= now.date() <= last_session.date()
-        
         if is_race_weekend_weather:
-            # Versenyhétvége van -> API lekérés
-            widget_data['weather_text'] = get_weather(race['Circuit']['Location']['lat'], race['Circuit']['Location']['long'])
+            txt, ico = get_weather_data(race['Circuit']['Location']['lat'], race['Circuit']['Location']['long'])
+            widget_data['weather_text'] = txt
+            widget_data['weather_icon'] = ico
         else:
-            # Nincs verseny -> Üresen hagyjuk, hogy a KWGT helyi adatot használjon
             widget_data['weather_text'] = ""
+            widget_data['weather_icon'] = ""
 
         # --- LIVE ÉS VISSZASZÁMLÁLÓ ---
         is_weekend_mode = now.date() >= first_session.date()
-        
         for s in sessions:
             if s["start"] <= now <= s["end"]:
                 widget_data['is_live'] = 1
@@ -155,7 +155,6 @@ def main():
             else:
                 time_left = first_session - now
                 days = time_left.days
-                if days < 0: days = 0
                 if days == 0:
                     hours, rem = divmod(time_left.seconds, 3600)
                     mins, _ = divmod(rem, 60)
@@ -163,87 +162,78 @@ def main():
                 else:
                     widget_data['status_text'] = f"{days} NAP VAN HÁTRA"
 
-        # --- MENETREND SZÖVEG ---
+        # --- MENETREND ---
         schedule_text = ""
         for s in sessions:
             local_time = s["start"].astimezone()
-            day_name = ["Hé", "Ke", "Sze", "Cs", "Pé", "Szo", "Va"][local_time.weekday()]
-            time_str = local_time.strftime("%H:%M")
-            schedule_text += f"{day_name} {time_str} | {s['name']}\n"
+            schedule_text += f"{['Hé','Ke','Sze','Cs','Pé','Szo','Va'][local_time.weekday()]} {local_time.strftime('%H:%M')} | {s['name']}\n"
         widget_data['schedule'] = schedule_text.strip()
 
-        # --- 3 FÁZISÚ DOBOGÓ LOGIKA ---
+        # --- DOBOGÓ LOGIKA (FALLBACK-KEL) ---
         last_race_data = get_json("https://api.jolpi.ca/ergast/f1/current/last.json")
-        
         display_mode = "CHAMPIONSHIP"
         last_race_end_time = LAST_SEASON_END
-        last_race_city = "Előző"
-
+        
         if last_race_data:
             try:
                 lr = last_race_data['MRData']['RaceTable']['Races'][0]
                 last_race_end_time = parser.parse(f"{lr['date']} {lr['time']}")
-                last_race_city = lr['Circuit']['Location']['locality']
             except: pass
 
         hours_since_last = (now - last_race_end_time).total_seconds() / 3600
         hours_since_quali = (now - quali_end).total_seconds() / 3600
 
-        if 0 < hours_since_last < 60:
-            display_mode = "LAST_RACE"
-        elif hours_since_quali > 0 and (first_session <= now <= last_session):
-            display_mode = "QUALIFYING"
-        else:
-            display_mode = "CHAMPIONSHIP"
+        if 0 < hours_since_last < 60: display_mode = "LAST_RACE"
+        elif hours_since_quali > 0 and (first_session <= now <= last_session): display_mode = "QUALIFYING"
+        else: display_mode = "CHAMPIONSHIP"
 
         p1, p2, p3 = "", "", ""
-
         if display_mode == "LAST_RACE":
-            widget_data['podium_title'] = f"{last_race_city} Podium".upper()
             try:
                 res = last_race_data['MRData']['RaceTable']['Races'][0]['Results']
                 p1, p2, p3 = res[0]['Driver']['code'], res[1]['Driver']['code'], res[2]['Driver']['code']
+                widget_data['podium_title'] = "ELŐZŐ DOBOGÓ"
             except: pass
-
         elif display_mode == "QUALIFYING":
-            widget_data['podium_title'] = f"{circuit_name} Pole".upper()
-            quali_data = get_json(f"https://api.jolpi.ca/ergast/f1/current/{round_num}/qualifying.json")
+            widget_data['podium_title'] = f"{circuit_name} POLE".upper()
             try:
-                res = quali_data['MRData']['RaceTable']['Races'][0]['QualifyingResults']
+                q_data = get_json(f"https://api.jolpi.ca/ergast/f1/current/{round_num}/qualifying.json")
+                res = q_data['MRData']['RaceTable']['Races'][0]['QualifyingResults']
                 p1, p2, p3 = res[0]['Driver']['code'], res[1]['Driver']['code'], res[2]['Driver']['code']
-            except: 
-                display_mode = "CHAMPIONSHIP" 
-
+            except: display_mode = "CHAMPIONSHIP"
         if display_mode == "CHAMPIONSHIP":
             widget_data['podium_title'] = "VILÁGBAJNOKSÁG"
             standings_data = get_json("https://api.jolpi.ca/ergast/f1/current/driverStandings.json")
+            found = False
             try:
                 res = standings_data['MRData']['StandingsTable']['StandingsLists'][0]['DriverStandings']
                 p1, p2, p3 = res[0]['Driver']['code'], res[1]['Driver']['code'], res[2]['Driver']['code']
+                found = True
             except: pass
+            if not found: # Fallback tavalyi évre
+                last_year = now.year - 1
+                standings_data = get_json(f"https://api.jolpi.ca/ergast/f1/{last_year}/driverStandings.json")
+                try:
+                    res = standings_data['MRData']['StandingsTable']['StandingsLists'][0]['DriverStandings']
+                    p1, p2, p3 = res[0]['Driver']['code'], res[1]['Driver']['code'], res[2]['Driver']['code']
+                except: pass
 
-        if p1:
-            widget_data['podium_data'] = f"🥇{p1}  🥈{p2}  🥉{p3}"
-        else:
-             widget_data['podium_data'] = ""
+        if p1: widget_data['podium_data'] = f"🥇{p1} 🥈{p2} 🥉{p3}"
+        else: widget_data['podium_data'] = ""
 
-        # --- PROGRESS BAR ---
+        # --- PROGRESS ---
         race_start = next((s["start"] for s in sessions if s["name"] == "Futam"), None)
-        calculated_progress = None
+        calc_progress = 50
         if race_start:
             total_duration = (race_start - last_race_end_time).total_seconds()
             elapsed = (now - last_race_end_time).total_seconds()
-            if total_duration > 0:
-                calculated_progress = int(max(0, min(100, (elapsed / total_duration) * 100)))
-        
-        widget_data['progress'] = calculated_progress if calculated_progress is not None else 50
+            if total_duration > 0: calc_progress = int(max(0, min(100, (elapsed / total_duration) * 100)))
+        widget_data['progress'] = calc_progress
 
-    except Exception as e:
-        widget_data['status_text'] = f"Hiba: {e}"
-        print(f"Végzetes hiba: {e}")
+    except Exception as e: print(f"Hiba: {e}")
 
     with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(widget_data, f)
-    print(f"Hibrid időjárás mód. Helyszín: {widget_data['location']}")
+    print(f"Ikon mód kész. Ikon: {widget_data['weather_icon']}")
 
 if __name__ == "__main__":
     main()
