@@ -11,7 +11,7 @@ JSON_OUTPUT_PATH = "f1_widget_data.json"
 SEASON_START = datetime(2026, 3, 6, tzinfo=timezone.utc) 
 LAST_SEASON_END = datetime(2025, 12, 8, tzinfo=timezone.utc) 
 
-# Pályarajz képek (Fekete-fehér szellem módhoz a KWGT-ben szürkére állítani)
+# Pályarajz képek (fekete-fehér szellem módhoz a KWGT-ben szürkére állítani)
 TRACK_MAPS = {
     "albert_park": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Australia_Circuit.png.transform/8col/image.png",
     "bahrain": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Bahrain_Circuit.png.transform/8col/image.png",
@@ -146,11 +146,11 @@ def main():
             end = start + timedelta(minutes=duration_min)
             sessions.append({"name": name, "start": start, "end": end})
 
-        add_session("Futam", race['date'], race['time'], 120)
-        if 'Qualifying' in race: add_session("Időmérő", race['Qualifying']['date'], race['Qualifying']['time'], 60)
-        if 'FirstPractice' in race: add_session("1. Edzés", race['FirstPractice']['date'], race['FirstPractice']['time'], 60)
-        if 'SecondPractice' in race: add_session("2. Edzés", race['SecondPractice']['date'], race['SecondPractice']['time'], 60)
-        if 'ThirdPractice' in race: add_session("3. Edzés", race['ThirdPractice']['date'], race['ThirdPractice']['time'], 60)
+        add_session("🏁 RACE", race['date'], race['time'], 120)
+        if 'Qualifying' in race: add_session("⏱️ Q", race['Qualifying']['date'], race['Qualifying']['time'], 60)
+        if 'FirstPractice' in race: add_session("FP1", race['FirstPractice']['date'], race['FirstPractice']['time'], 60)
+        if 'SecondPractice' in race: add_session("FP2", race['SecondPractice']['date'], race['SecondPractice']['time'], 60)
+        if 'ThirdPractice' in race: add_session("FP3", race['ThirdPractice']['date'], race['ThirdPractice']['time'], 60)
         if 'Sprint' in race: add_session("Sprint", race['Sprint']['date'], race['Sprint']['time'], 60)
         if 'SprintQualifying' in race: add_session("Sprint Q", race['SprintQualifying']['date'], race['SprintQualifying']['time'], 45)
 
