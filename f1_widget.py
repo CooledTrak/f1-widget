@@ -251,24 +251,50 @@ def main():
                 if len(d_res) > 2: widget_data['d3_c'], widget_data['d3_p'] = d_res[2]['Driver']['code'], d_res[2]['points']
         except Exception as e: print(f"Pilóta hiba: {e}")
 
-        # --- PROGRESS BAR ---
-        last_race_end = LAST_SEASON_END # Default
-        # Próbáljuk megkeresni az előző futamot
-        last_race_data = get_json("https://api.jolpi.ca/ergast/f1/current/last.json")
-        if last_race_data:
-            try:
-                lr = last_race_data['MRData']['RaceTable']['Races'][0]
-                last_race_end = parser.parse(f"{lr['date']} {lr['time']}")
-            except: pass
+                # --- PROGRESS BAR (JAVÍTOTT TÉLI SZÜNET MÓD) ---
+        # 1. Megnézzük, mikor van az első esemény (első edzés vagy futam)
+        season_start_point = first_session
 
-        race_start = next((s["start"] for s in sessions if s["name"] == "Futam"), None)
-        calc_progress = 0
-        if race_start:
-            total_duration = (race_start - last_race_end).total_seconds()
+        # 2. Ha a mostani idő (Jan 31) még az első edzés előtt van:
+        if now < season_start_point:
+            # TÉLI SZÜNET MÓD: Fix dátumokat használunk
+            # Kezdőpont: 2025. Dec 8. (Tavalyi szezonzáró)
+            # Végpont: 2026. Márc 6. (Idei szezonnyitó edzés)
+            start_date = LAST_SEASON_END
+            end_date = season_start_point
+            
+            total_seconds = (end_date - start_date).total_seconds()
+            elapsed_seconds = (now - start_date).total_seconds()
+            
+            # Százalék számítása
+            if total_seconds > 0:
+                calc_progress = int((elapsed_seconds / total_seconds) * 100)
+            else:
+                calc_progress = 0
+                
+        else:
+            # SZEZON KÖZBENI MÓD (Amikor már mennek a futamok)
+            # Itt már használhatjuk az API-t az előző futamhoz
+            last_race_end = LAST_SEASON_END # Default fallback
+            last_race_data = get_json("https://api.jolpi.ca/ergast/f1/current/last.json")
+            if last_race_data:
+                try:
+                    lr = last_race_data['MRData']['RaceTable']['Races'][0]
+                    # Időzóna biztos parse-olás
+                    last_race_end = parser.parse(f"{lr['date']} {lr['time']}").replace(tzinfo=timezone.utc)
+                except: pass
+            
+            total_duration = (season_start_point - last_race_end).total_seconds()
             elapsed = (now - last_race_end).total_seconds()
+            
             if total_duration > 0:
-                calc_progress = int(max(0, min(100, (elapsed / total_duration) * 100)))
-        widget_data['progress'] = calc_progress
+                calc_progress = int((elapsed / total_duration) * 100)
+            else:
+                calc_progress = 50
+
+        # Biztonsági határok (ne legyen -5% vagy 120%)
+        widget_data['progress'] = max(0, min(100, calc_progress))
+        print(f"SZÁMOLT PROGRESS: {widget_data['progress']}% (Most: {now}, Start: {season_start_point})")
 
     except Exception as e:
         widget_data['status_text'] = f"Hiba: {e}"
@@ -280,3 +306,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
