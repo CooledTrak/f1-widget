@@ -9,17 +9,16 @@ WEATHER_API_KEY = "84352f72e1c7846365290f1afb251a4c"
 JSON_OUTPUT_PATH = "f1_widget_data.json"
 
 # SZEZON HATÁROK (2026)
-# Fontos a pontos dátum és az UTC időzóna a számításokhoz
 LAST_SEASON_END = datetime(2025, 12, 8, 14, 0, 0, tzinfo=timezone.utc)
 SEASON_START_2026 = datetime(2026, 3, 6, 4, 0, 0, tzinfo=timezone.utc)
 
-# SAJÁT KÉPEK (GitHub repóból)
+# SAJÁT KÉPEK (GitHub repóból - CooledTrak)
 BASE_REPO_URL = "https://raw.githubusercontent.com/CooledTrak/f1-widget/main"
 IMG_HARD = f"{BASE_REPO_URL}/pirellif1pzerohard2026.png"
 IMG_MED = f"{BASE_REPO_URL}/pirellif1pzeromedium2026.png"
 IMG_SOFT = f"{BASE_REPO_URL}/pirellif1pzerosoft2026.png"
 
-# PÁLYA RAJZOK (Teljes lista)
+# PÁLYA RAJZOK
 TRACK_MAPS = {
     "albert_park": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Australia_Circuit.png.transform/8col/image.png",
     "bahrain": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Bahrain_Circuit.png.transform/8col/image.png",
@@ -47,7 +46,7 @@ TRACK_MAPS = {
     "yas_marina": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Abu_Dhabi_Circuit.png.transform/8col/image.png"
 }
 
-# PÁLYA ADATOK (Teljes lista)
+# PÁLYA ADATOK
 TRACK_SPECS = {
     "albert_park": "58 KÖR | 5.278 KM | 1:19.813",
     "bahrain": "57 KÖR | 5.412 KM | 1:31.447",
@@ -75,32 +74,16 @@ TRACK_SPECS = {
     "yas_marina": "58 KÖR | 5.281 KM | 1:26.103"
 }
 
-# GUMIKIOSZTÁS (Teljes lista - 2026 Becslés)
+# GUMIKIOSZTÁS
 TYRE_ALLOCATIONS = {
-    "bahrain": ["C1", "C2", "C3"],     
-    "jeddah": ["C2", "C3", "C4"],      
-    "albert_park": ["C3", "C4", "C5"], 
-    "suzuka": ["C1", "C2", "C3"],      
-    "shanghai": ["C2", "C3", "C4"],
-    "miami": ["C2", "C3", "C4"],
-    "imola": ["C3", "C4", "C5"],
-    "monaco": ["C4", "C5", "C6"],      
-    "catalunya": ["C1", "C2", "C3"],
-    "villeneuve": ["C3", "C4", "C5"],
-    "red_bull_ring": ["C3", "C4", "C5"],
-    "silverstone": ["C1", "C2", "C3"],
-    "hungaroring": ["C3", "C4", "C5"], 
-    "spa": ["C2", "C3", "C4"],
-    "zandvoort": ["C1", "C2", "C3"],
-    "monza": ["C3", "C4", "C5"],
-    "baku": ["C3", "C4", "C5"],
-    "marina_bay": ["C4", "C5", "C6"],  
-    "americas": ["C2", "C3", "C4"],
-    "rodriguez": ["C3", "C4", "C5"],
-    "interlagos": ["C2", "C3", "C4"],
-    "vegas": ["C3", "C4", "C5"],
-    "losail": ["C1", "C2", "C3"],
-    "yas_marina": ["C3", "C4", "C5"]
+    "bahrain": ["C1", "C2", "C3"], "jeddah": ["C2", "C3", "C4"], "albert_park": ["C3", "C4", "C5"],
+    "suzuka": ["C1", "C2", "C3"], "shanghai": ["C2", "C3", "C4"], "miami": ["C2", "C3", "C4"],
+    "imola": ["C3", "C4", "C5"], "monaco": ["C4", "C5", "C6"], "catalunya": ["C1", "C2", "C3"],
+    "villeneuve": ["C3", "C4", "C5"], "red_bull_ring": ["C3", "C4", "C5"], "silverstone": ["C1", "C2", "C3"],
+    "hungaroring": ["C3", "C4", "C5"], "spa": ["C2", "C3", "C4"], "zandvoort": ["C1", "C2", "C3"],
+    "monza": ["C3", "C4", "C5"], "baku": ["C3", "C4", "C5"], "marina_bay": ["C4", "C5", "C6"],
+    "americas": ["C2", "C3", "C4"], "rodriguez": ["C3", "C4", "C5"], "interlagos": ["C2", "C3", "C4"],
+    "vegas": ["C3", "C4", "C5"], "losail": ["C1", "C2", "C3"], "yas_marina": ["C3", "C4", "C5"]
 }
 
 def get_json(url):
@@ -112,25 +95,19 @@ def get_json(url):
 
 def format_date_range(start_date, end_date):
     months = ["JAN", "FEB", "MÁRC", "ÁPR", "MÁJ", "JÚN", "JÚL", "AUG", "SZEP", "OKT", "NOV", "DEC"]
-    s_month = months[start_date.month - 1]
-    e_month = months[end_date.month - 1]
-    if s_month == e_month: return f"{s_month} {start_date.day} - {end_date.day}"
-    return f"{s_month} {start_date.day} - {e_month} {end_date.day}"
+    if start_date.month == end_date.month: 
+        return f"{months[start_date.month - 1]} {start_date.day} - {end_date.day}"
+    return f"{months[start_date.month - 1]} {start_date.day} - {months[end_date.month - 1]} {end_date.day}"
 
 def main():
-    # --- ALAPÉRTELMEZETT ADATOK (Placeholder) ---
-    # Ha bármi hiba történik, ezekkel töltjük fel a fájlt, hogy ne omoljon össze a widget
     widget_data = {
         "status_title": "F1 WIDGET", "location": "", "race_dates": "", "track_info": "",
         "w_temp": "", "w_desc": "", "w_icon": "", "w_wind": "", "w_hum": "",
         "status_text": "ADATOK...", "is_weekend_mode": 0, "is_live": 0, "progress": 0,
         "schedule": "", "track_map": "", "podium_title": "",
-        # GUMIK (Alapérték)
+        "weekend_progress": 0,
         "tyre_h": "C1", "tyre_m": "C2", "tyre_s": "C3",
-        "tyre_img_h": IMG_HARD, 
-        "tyre_img_m": IMG_MED, 
-        "tyre_img_s": IMG_SOFT,
-        # BAJNOKSÁG (Alapérték)
+        "tyre_img_h": IMG_HARD, "tyre_img_m": IMG_MED, "tyre_img_s": IMG_SOFT,
         "d1_c": "VER", "d1_p": "0", "d2_c": "NOR", "d2_p": "0", "d3_c": "HAM", "d3_p": "0",
         "c1_c": "MCL", "c1_p": "0", "c2_c": "RBR", "c2_p": "0", "c3_c": "FER", "c3_p": "0"
     }
@@ -138,52 +115,32 @@ def main():
     print("--- ADATGYŰJTÉS INDÍTÁSA ---")
 
     try:
-        # 1. KÖVETKEZŐ FUTAM LEKÉRÉSE
         next_data = get_json("https://api.jolpi.ca/ergast/f1/current/next.json")
-        
         if not next_data:
-            print("HIBA: Nem sikerült elérni a next.json-t (Lehet, hogy szezon vége van)")
-            # Itt lehetne fallback logikát írni, de most mentjük az üreset
             with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(widget_data, f)
             return
 
         race = next_data['MRData']['RaceTable']['Races'][0]
-        race_name = race['raceName'].replace("Grand Prix", "GP")
         circuit_id = race['Circuit']['circuitId']
-        circuit_name = race['Circuit']['Location']['locality']
         
-        # PÁLYA ADATOK BETÖLTÉSE
-        widget_data['status_title'] = race_name.upper()
-        widget_data['location'] = circuit_name.upper()
+        widget_data['status_title'] = race['raceName'].replace("Grand Prix", "GP").upper()
+        widget_data['location'] = race['Circuit']['Location']['locality'].upper()
 
-        if circuit_id in TRACK_MAPS: 
-            widget_data['track_map'] = TRACK_MAPS[circuit_id]
-        
-        if circuit_id in TRACK_SPECS: 
-            widget_data['track_info'] = TRACK_SPECS[circuit_id]
-        
-        # --- GUMIK BETÖLTÉSE ---
-        # Itt választjuk ki a helyes keveréket a pálya ID alapján
+        if circuit_id in TRACK_MAPS: widget_data['track_map'] = TRACK_MAPS[circuit_id]
+        if circuit_id in TRACK_SPECS: widget_data['track_info'] = TRACK_SPECS[circuit_id]
         if circuit_id in TYRE_ALLOCATIONS:
             alloc = TYRE_ALLOCATIONS[circuit_id]
-            widget_data['tyre_h'] = alloc[0] 
-            widget_data['tyre_m'] = alloc[1] 
-            widget_data['tyre_s'] = alloc[2]
-            # A képek linkjei fixek (IMG_HARD, stb), már be vannak állítva fent 
+            widget_data['tyre_h'], widget_data['tyre_m'], widget_data['tyre_s'] = alloc[0], alloc[1], alloc[2]
         
-        # --- IDŐZÓNA ÉS MENETREND ---
         now = datetime.now(timezone.utc)
         sessions = []
         
-        # Segédfüggvény az időpontok biztonságos konvertálásához
         def add_session(name, date_str, time_str, duration_min):
-            # A 'Z' betű eltávolítása és explicit UTC beállítás
             clean_time = time_str.replace("Z", "")
             start = parser.parse(f"{date_str} {clean_time}").replace(tzinfo=timezone.utc)
             end = start + timedelta(minutes=duration_min)
             sessions.append({"name": name, "start": start, "end": end})
 
-        # Események hozzáadása
         add_session("Futam", race['date'], race['time'], 120)
         if 'Qualifying' in race: add_session("Időmérő", race['Qualifying']['date'], race['Qualifying']['time'], 60)
         if 'FirstPractice' in race: add_session("1. Edzés", race['FirstPractice']['date'], race['FirstPractice']['time'], 60)
@@ -192,20 +149,51 @@ def main():
         if 'Sprint' in race: add_session("Sprint", race['Sprint']['date'], race['Sprint']['time'], 60)
         if 'SprintQualifying' in race: add_session("Sprint Q", race['SprintQualifying']['date'], race['SprintQualifying']['time'], 45)
 
-        # Sorba rendezés idő szerint
         sessions.sort(key=lambda x: x["start"])
         first_session = sessions[0]["start"]
         last_session = sessions[-1]["end"]
         
-        # Dátum formázás (pl. MÁRC 6 - 8)
         widget_data['race_dates'] = format_date_range(first_session, last_session) + f", {first_session.year}"
         
-        # --- WEEKEND MODE (Péntek-Vasárnap) ---
+        # --- WEEKEND PROGRESS SZÁMÍTÁS (0-100%) ---
+        weekend_duration = (last_session - first_session).total_seconds()
+        time_since_start = (now - first_session).total_seconds()
+        
+        if now < first_session:
+            widget_data['weekend_progress'] = 0 
+        elif now > last_session:
+            widget_data['weekend_progress'] = 100
+        else:
+            if weekend_duration > 0:
+                prog = (time_since_start / weekend_duration) * 100
+                widget_data['weekend_progress'] = max(0, min(100, int(prog)))
+            else:
+                widget_data['weekend_progress'] = 0
+
+        # --- MENETREND SZÍNEZÉS ---
+        schedule_text = ""
+        for s in sessions:
+            local_time = s["start"].astimezone()
+            day_name = ["Hé", "Ke", "Sze", "Cs", "Pé", "Szo", "Va"][local_time.weekday()]
+            time_str = local_time.strftime("%H:%M")
+            
+            if now > s["end"]: 
+                # MÚLT: Halvány szürke (#70FFFFFF)
+                schedule_text += f"[c=#70FFFFFF]{day_name} {time_str} | {s['name']}[/c]\n"
+            elif s["start"] <= now <= s["end"]: 
+                # JELEN: Zöld (#00FF00), félkövér
+                schedule_text += f"[c=#00FF00][b]{day_name} {time_str} | {s['name']}[/b][/c]\n"
+            else: 
+                # JÖVŐ: Fehér (Alapértelmezett)
+                schedule_text += f"{day_name} {time_str} | {s['name']}\n"
+        
+        widget_data['schedule'] = schedule_text.strip()
+        
+        # IDŐJÁRÁS
         race_date = parser.parse(race['date']).date()
         friday_date = race_date - timedelta(days=2)
         today = now.date()
 
-        # Időjárás lekérdezés segédfüggvény
         def get_weather():
             url = f"https://api.openweathermap.org/data/2.5/weather?lat={race['Circuit']['Location']['lat']}&lon={race['Circuit']['Location']['long']}&appid={WEATHER_API_KEY}&units=metric&lang=hu"
             data = get_json(url)
@@ -224,14 +212,11 @@ def main():
             widget_data['w_temp'], widget_data['w_desc'], widget_data['w_icon'], widget_data['w_wind'], widget_data['w_hum'] = get_weather()
         else:
             widget_data['is_weekend_mode'] = 0
-            # Teszt célból (hogy lásd az adatokat hétköznap is) lekérjük
             widget_data['w_temp'], widget_data['w_desc'], widget_data['w_icon'], widget_data['w_wind'], widget_data['w_hum'] = get_weather()
 
-        # --- PROGRESS BAR (TÉLI SZÜNET FIX) ---
+        # PROGRESS BAR (SZEZON)
         season_start_point = first_session
-        
         if now < season_start_point:
-            # Téli szünet mód
             start_date = LAST_SEASON_END
             end_date = season_start_point
             total_seconds = (end_date - start_date).total_seconds()
@@ -245,48 +230,12 @@ def main():
             days_left = (season_start_point - now).days
             widget_data['status_text'] = f"{days_left} NAP VAN HÁTRA"
         else:
-            # Szezon közben
-            calc_progress = 50 # Fallback
+            calc_progress = 50
             widget_data['status_text'] = "VERSENYHÉTVÉGE"
         
         widget_data['progress'] = max(0, min(100, calc_progress))
         
-        # --- MENETREND GENERÁLÁS (SZÍNEZETT) ---
-        schedule_text = ""
-        for s in sessions:
-            local_time = s["start"].astimezone()
-            day_name = ["Hé", "Ke", "Sze", "Cs", "Pé", "Szo", "Va"][local_time.weekday()]
-            time_str = local_time.strftime("%H:%M")
-            
-            if now > s["end"]: 
-                # Elmúlt
-                schedule_text += f"[c=#70FFFFFF]✔ {day_name} {time_str} | {s['name']}[/c]\n"
-            elif s["start"] <= now <= s["end"]: 
-                # Éppen tart
-                schedule_text += f"[c=#00FF00][b]🔴 {day_name} {time_str} | {s['name']}[/b][/c]\n"
-            else: 
-                # Jövőbeli
-                schedule_text += f"{day_name} {time_str} | {s['name']}\n"
-        
-        widget_data['schedule'] = schedule_text.strip()
-        
-        # --- BAJNOKSÁG ADATOK LEKÉRÉSE ---
-        # Konstruktőrök
-        try:
-            c_data = get_json("https://api.jolpi.ca/ergast/f1/current/constructorStandings.json")
-            # Ha év eleje van és még nincs adat, nézzük a tavalyit
-            if not c_data or not c_data['MRData']['StandingsTable']['StandingsLists']:
-                 c_data = get_json(f"https://api.jolpi.ca/ergast/f1/{now.year-1}/constructorStandings.json")
-            
-            if c_data and c_data['MRData']['StandingsTable']['StandingsLists']:
-                c_res = c_data['MRData']['StandingsTable']['StandingsLists'][0]['ConstructorStandings']
-                if len(c_res) > 0: widget_data['c1_c'], widget_data['c1_p'] = c_res[0]['Constructor']['name'][:3].upper(), c_res[0]['points']
-                if len(c_res) > 1: widget_data['c2_c'], widget_data['c2_p'] = c_res[1]['Constructor']['name'][:3].upper(), c_res[1]['points']
-                if len(c_res) > 2: widget_data['c3_c'], widget_data['c3_p'] = c_res[2]['Constructor']['name'][:3].upper(), c_res[2]['points']
-        except Exception as e: 
-            print(f"Konstruktőr hiba: {e}")
-
-        # Pilóták
+        # BAJNOKSÁG
         try:
             d_data = get_json("https://api.jolpi.ca/ergast/f1/current/driverStandings.json")
             if not d_data or not d_data['MRData']['StandingsTable']['StandingsLists']:
@@ -300,15 +249,25 @@ def main():
         except Exception as e: 
             print(f"Pilóta hiba: {e}")
 
+        # KONSTRUKTŐR
+        try:
+            c_data = get_json("https://api.jolpi.ca/ergast/f1/current/constructorStandings.json")
+            if not c_data or not c_data['MRData']['StandingsTable']['StandingsLists']:
+                 c_data = get_json(f"https://api.jolpi.ca/ergast/f1/{now.year-1}/constructorStandings.json")
+            
+            if c_data and c_data['MRData']['StandingsTable']['StandingsLists']:
+                c_res = c_data['MRData']['StandingsTable']['StandingsLists'][0]['ConstructorStandings']
+                if len(c_res) > 0: widget_data['c1_c'], widget_data['c1_p'] = c_res[0]['Constructor']['name'][:3].upper(), c_res[0]['points']
+                if len(c_res) > 1: widget_data['c2_c'], widget_data['c2_p'] = c_res[1]['Constructor']['name'][:3].upper(), c_res[1]['points']
+                if len(c_res) > 2: widget_data['c3_c'], widget_data['c3_p'] = c_res[2]['Constructor']['name'][:3].upper(), c_res[2]['points']
+        except Exception as e: 
+            print(f"Konstruktőr hiba: {e}")
+
     except Exception as e:
-        # Ha valami nagy baj van (pl. nincs net), kiírjuk a logba
-        print(f"VÉGZETES HIBA: {e}")
         traceback.print_exc()
 
-    # MENTÉS
     with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(widget_data, f)
-    print(f"Sikeres mentés: {JSON_OUTPUT_PATH}")
+    print("Mentés kész.")
 
 if __name__ == "__main__":
     main()
-
