@@ -12,7 +12,7 @@ JSON_OUTPUT_PATH = "f1_widget_data.json"
 LAST_SEASON_END = datetime(2025, 12, 8, 14, 0, 0, tzinfo=timezone.utc)
 SEASON_START_2026 = datetime(2026, 3, 6, 4, 0, 0, tzinfo=timezone.utc)
 
-# SAJÁT KÉPEK (GitHub repóból - CooledTrak)
+# SAJÁT KÉPEK (GitHub repóból)
 BASE_REPO_URL = "https://raw.githubusercontent.com/CooledTrak/f1-widget/main"
 IMG_HARD = f"{BASE_REPO_URL}/pirellif1pzerohard2026.png"
 IMG_MED = f"{BASE_REPO_URL}/pirellif1pzeromedium2026.png"
@@ -105,7 +105,7 @@ def main():
         "w_temp": "", "w_desc": "", "w_icon": "", "w_wind": "", "w_hum": "",
         "status_text": "ADATOK...", "is_weekend_mode": 0, "is_live": 0, "progress": 0,
         "schedule": "", "track_map": "", "podium_title": "",
-        "weekend_progress": 0,
+        "weekend_progress": 0.0, # Float típus a finomabb sávhoz
         "tyre_h": "C1", "tyre_m": "C2", "tyre_s": "C3",
         "tyre_img_h": IMG_HARD, "tyre_img_m": IMG_MED, "tyre_img_s": IMG_SOFT,
         "d1_c": "VER", "d1_p": "0", "d2_c": "NOR", "d2_p": "0", "d3_c": "HAM", "d3_p": "0",
@@ -151,26 +151,28 @@ def main():
 
         sessions.sort(key=lambda x: x["start"])
         first_session = sessions[0]["start"]
-        last_session = sessions[-1]["end"]
+        last_session = sessions[-1]["end"] # A Futam vége, mivel az kezdődik legkésőbb
         
         widget_data['race_dates'] = format_date_range(first_session, last_session) + f", {first_session.year}"
         
         # --- WEEKEND PROGRESS SZÁMÍTÁS (0-100%) ---
+        # Pontos számítás: (most - hétvége kezdete) / (hétvége teljes hossza)
         weekend_duration = (last_session - first_session).total_seconds()
         time_since_start = (now - first_session).total_seconds()
         
         if now < first_session:
-            widget_data['weekend_progress'] = 0 
+            widget_data['weekend_progress'] = 0.0
         elif now > last_session:
-            widget_data['weekend_progress'] = 100
+            widget_data['weekend_progress'] = 100.0
         else:
             if weekend_duration > 0:
                 prog = (time_since_start / weekend_duration) * 100
-                widget_data['weekend_progress'] = max(0, min(100, int(prog)))
+                # Floatként menti, 2 tizedesjegy pontossággal
+                widget_data['weekend_progress'] = round(max(0.0, min(100.0, float(prog))), 2)
             else:
-                widget_data['weekend_progress'] = 0
+                widget_data['weekend_progress'] = 0.0
 
-        # --- MENETREND SZÍNEZÉS ---
+        # MENETREND SZÍNEZÉS
         schedule_text = ""
         for s in sessions:
             local_time = s["start"].astimezone()
@@ -178,13 +180,10 @@ def main():
             time_str = local_time.strftime("%H:%M")
             
             if now > s["end"]: 
-                # MÚLT: Halvány szürke (#70FFFFFF)
                 schedule_text += f"[c=#70FFFFFF]{day_name} {time_str} | {s['name']}[/c]\n"
             elif s["start"] <= now <= s["end"]: 
-                # JELEN: Zöld (#00FF00), félkövér
                 schedule_text += f"[c=#00FF00][b]{day_name} {time_str} | {s['name']}[/b][/c]\n"
             else: 
-                # JÖVŐ: Fehér (Alapértelmezett)
                 schedule_text += f"{day_name} {time_str} | {s['name']}\n"
         
         widget_data['schedule'] = schedule_text.strip()
@@ -214,19 +213,17 @@ def main():
             widget_data['is_weekend_mode'] = 0
             widget_data['w_temp'], widget_data['w_desc'], widget_data['w_icon'], widget_data['w_wind'], widget_data['w_hum'] = get_weather()
 
-        # PROGRESS BAR (SZEZON)
+        # SZEZON PROGRESS
         season_start_point = first_session
         if now < season_start_point:
             start_date = LAST_SEASON_END
             end_date = season_start_point
             total_seconds = (end_date - start_date).total_seconds()
             elapsed_seconds = (now - start_date).total_seconds()
-            
             if total_seconds > 0:
                 calc_progress = int((elapsed_seconds / total_seconds) * 100)
             else:
                 calc_progress = 0
-            
             days_left = (season_start_point - now).days
             widget_data['status_text'] = f"{days_left} NAP VAN HÁTRA"
         else:
@@ -240,7 +237,6 @@ def main():
             d_data = get_json("https://api.jolpi.ca/ergast/f1/current/driverStandings.json")
             if not d_data or not d_data['MRData']['StandingsTable']['StandingsLists']:
                  d_data = get_json(f"https://api.jolpi.ca/ergast/f1/{now.year-1}/driverStandings.json")
-            
             if d_data and d_data['MRData']['StandingsTable']['StandingsLists']:
                 d_res = d_data['MRData']['StandingsTable']['StandingsLists'][0]['DriverStandings']
                 if len(d_res) > 0: widget_data['d1_c'], widget_data['d1_p'] = d_res[0]['Driver']['code'], d_res[0]['points']
@@ -249,12 +245,10 @@ def main():
         except Exception as e: 
             print(f"Pilóta hiba: {e}")
 
-        # KONSTRUKTŐR
         try:
             c_data = get_json("https://api.jolpi.ca/ergast/f1/current/constructorStandings.json")
             if not c_data or not c_data['MRData']['StandingsTable']['StandingsLists']:
                  c_data = get_json(f"https://api.jolpi.ca/ergast/f1/{now.year-1}/constructorStandings.json")
-            
             if c_data and c_data['MRData']['StandingsTable']['StandingsLists']:
                 c_res = c_data['MRData']['StandingsTable']['StandingsLists'][0]['ConstructorStandings']
                 if len(c_res) > 0: widget_data['c1_c'], widget_data['c1_p'] = c_res[0]['Constructor']['name'][:3].upper(), c_res[0]['points']
