@@ -8,8 +8,10 @@ from dateutil import parser
 WEATHER_API_KEY = "84352f72e1c7846365290f1afb251a4c"
 JSON_OUTPUT_PATH = "f1_widget_data.json"
 
-# KEDVENC CSAPAT SZÍNE (A Progress Bar ehhez igazodik)
-# F1 Piros: #FF1801, McLaren: #FF8000, RedBull: #1E41FF, Mercedes: #00D2BE, Aston: #006F62, Ferrari: #C00000
+# KEDVENC CSAPAT SZÍNE (Referencia a KWGT beállításhoz)
+# McLaren: #FF8000, Ferrari: #FF1801, RedBull: #1E41FF, Mercedes: #00D2BE
+# Aston: #006F62, Williams: #00A0DE, Alpine: #FF87BC, VCARB: #6692FF
+# Audi (Sauber utód): #F20519, Cadillac (GM): #FFD700
 MY_TEAM_COLOR = "#FF1801" 
 
 # SZEZON HATÁROK (2026)
@@ -50,6 +52,7 @@ TRACK_MAPS = {
     "yas_marina": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Abu_Dhabi_Circuit.png.transform/8col/image.png"
 }
 
+# PÁLYA ADATOK
 TRACK_SPECS = {
     "albert_park": "58 KÖR | 5.278 KM | 1:19.813",
     "bahrain": "57 KÖR | 5.412 KM | 1:31.447",
@@ -77,6 +80,7 @@ TRACK_SPECS = {
     "yas_marina": "58 KÖR | 5.281 KM | 1:26.103"
 }
 
+# GUMIKIOSZTÁS
 TYRE_ALLOCATIONS = {
     "bahrain": ["C1", "C2", "C3"], "jeddah": ["C2", "C3", "C4"], "albert_park": ["C3", "C4", "C5"],
     "suzuka": ["C1", "C2", "C3"], "shanghai": ["C2", "C3", "C4"], "miami": ["C2", "C3", "C4"],
@@ -108,8 +112,8 @@ def main():
         "status_text": "ADATOK...", "is_weekend_mode": 0, "is_live": 0, "progress": 0,
         "schedule": "", "track_map": "", "podium_title": "",
         "weekend_progress": 0.0,
-        "bar_color": MY_TEAM_COLOR, # ÚJ: A választott színed
-        "race_timestamp": "", # ÚJ: A pontos időpont a visszaszámláláshoz
+        "bar_color": MY_TEAM_COLOR,
+        "race_timestamp": "",
         "tyre_h": "C1", "tyre_m": "C2", "tyre_s": "C3",
         "tyre_img_h": IMG_HARD, "tyre_img_m": IMG_MED, "tyre_img_s": IMG_SOFT,
         "d1_c": "VER", "d1_p": "0", "d2_c": "NOR", "d2_p": "0", "d3_c": "HAM", "d3_p": "0",
@@ -145,8 +149,9 @@ def main():
             end = start + timedelta(minutes=duration_min)
             sessions.append({"name": name, "start": start, "end": end})
             
-            # HA ez a futam, elmentjük a pontos idejét a visszaszámláláshoz
-            if name == "Futam":
+            # --- VISSZASZÁMLÁLÓ ADATMENTÉS ---
+            # Megkeressük a futam pontos idejét és elmentjük
+            if "Race" in name or "Futam" in name:
                 widget_data['race_timestamp'] = start.isoformat()
 
         add_session("Futam", race['date'], race['time'], 120)
@@ -160,6 +165,10 @@ def main():
         sessions.sort(key=lambda x: x["start"])
         first_session = sessions[0]["start"]
         last_session = sessions[-1]["end"]
+        
+        # Ha esetleg nem találtuk volna meg a futamot a loopban, biztosítjuk a last_session-t
+        if not widget_data['race_timestamp']:
+            widget_data['race_timestamp'] = last_session.isoformat()
         
         widget_data['race_dates'] = format_date_range(first_session, last_session) + f", {first_session.year}"
         
