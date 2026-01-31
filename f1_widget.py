@@ -8,10 +8,10 @@ from dateutil import parser
 WEATHER_API_KEY = "84352f72e1c7846365290f1afb251a4c"
 JSON_OUTPUT_PATH = "f1_widget_data.json"
 
-# KEDVENC CSAPAT SZÍNE (Referencia a KWGT beállításhoz)
+# KEDVENC CSAPAT SZÍNE (A Progress Bar ehhez igazodik)
 # McLaren: #FF8000, Ferrari: #FF1801, RedBull: #1E41FF, Mercedes: #00D2BE
 # Aston: #006F62, Williams: #00A0DE, Alpine: #FF87BC, VCARB: #6692FF
-# Audi (Sauber utód): #F20519, Cadillac (GM): #FFD700
+# Audi: #F20519, Cadillac: #FFD700
 MY_TEAM_COLOR = "#FF1801" 
 
 # SZEZON HATÁROK (2026)
@@ -52,7 +52,6 @@ TRACK_MAPS = {
     "yas_marina": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Abu_Dhabi_Circuit.png.transform/8col/image.png"
 }
 
-# PÁLYA ADATOK
 TRACK_SPECS = {
     "albert_park": "58 KÖR | 5.278 KM | 1:19.813",
     "bahrain": "57 KÖR | 5.412 KM | 1:31.447",
@@ -80,7 +79,6 @@ TRACK_SPECS = {
     "yas_marina": "58 KÖR | 5.281 KM | 1:26.103"
 }
 
-# GUMIKIOSZTÁS
 TYRE_ALLOCATIONS = {
     "bahrain": ["C1", "C2", "C3"], "jeddah": ["C2", "C3", "C4"], "albert_park": ["C3", "C4", "C5"],
     "suzuka": ["C1", "C2", "C3"], "shanghai": ["C2", "C3", "C4"], "miami": ["C2", "C3", "C4"],
@@ -149,10 +147,9 @@ def main():
             end = start + timedelta(minutes=duration_min)
             sessions.append({"name": name, "start": start, "end": end})
             
-            # --- VISSZASZÁMLÁLÓ ADATMENTÉS ---
-            # Megkeressük a futam pontos idejét és elmentjük
+            # --- JAVÍTOTT DÁTUM MENTÉS (Z végződéssel) ---
             if "Race" in name or "Futam" in name:
-                widget_data['race_timestamp'] = start.isoformat()
+                widget_data['race_timestamp'] = start.strftime('%Y-%m-%dT%H:%M:%SZ')
 
         add_session("Futam", race['date'], race['time'], 120)
         if 'Qualifying' in race: add_session("Időmérő", race['Qualifying']['date'], race['Qualifying']['time'], 60)
@@ -166,9 +163,9 @@ def main():
         first_session = sessions[0]["start"]
         last_session = sessions[-1]["end"]
         
-        # Ha esetleg nem találtuk volna meg a futamot a loopban, biztosítjuk a last_session-t
+        # Biztonsági mentés, ha a Futam valamiért nem lett volna meg
         if not widget_data['race_timestamp']:
-            widget_data['race_timestamp'] = last_session.isoformat()
+            widget_data['race_timestamp'] = last_session.strftime('%Y-%m-%dT%H:%M:%SZ')
         
         widget_data['race_dates'] = format_date_range(first_session, last_session) + f", {first_session.year}"
         
