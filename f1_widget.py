@@ -8,6 +8,10 @@ from dateutil import parser
 WEATHER_API_KEY = "84352f72e1c7846365290f1afb251a4c"
 JSON_OUTPUT_PATH = "f1_widget_data.json"
 
+# KEDVENC CSAPAT SZÍNE (A Progress Bar ehhez igazodik)
+# F1 Piros: #FF1801, McLaren: #FF8000, RedBull: #1E41FF, Mercedes: #00D2BE, Aston: #006F62, Ferrari: #C00000
+MY_TEAM_COLOR = "#FF1801" 
+
 # SZEZON HATÁROK (2026)
 LAST_SEASON_END = datetime(2025, 12, 8, 14, 0, 0, tzinfo=timezone.utc)
 SEASON_START_2026 = datetime(2026, 3, 6, 4, 0, 0, tzinfo=timezone.utc)
@@ -46,7 +50,6 @@ TRACK_MAPS = {
     "yas_marina": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Abu_Dhabi_Circuit.png.transform/8col/image.png"
 }
 
-# PÁLYA ADATOK
 TRACK_SPECS = {
     "albert_park": "58 KÖR | 5.278 KM | 1:19.813",
     "bahrain": "57 KÖR | 5.412 KM | 1:31.447",
@@ -74,7 +77,6 @@ TRACK_SPECS = {
     "yas_marina": "58 KÖR | 5.281 KM | 1:26.103"
 }
 
-# GUMIKIOSZTÁS
 TYRE_ALLOCATIONS = {
     "bahrain": ["C1", "C2", "C3"], "jeddah": ["C2", "C3", "C4"], "albert_park": ["C3", "C4", "C5"],
     "suzuka": ["C1", "C2", "C3"], "shanghai": ["C2", "C3", "C4"], "miami": ["C2", "C3", "C4"],
@@ -105,7 +107,9 @@ def main():
         "w_temp": "", "w_desc": "", "w_icon": "", "w_wind": "", "w_hum": "",
         "status_text": "ADATOK...", "is_weekend_mode": 0, "is_live": 0, "progress": 0,
         "schedule": "", "track_map": "", "podium_title": "",
-        "weekend_progress": 0.0, # Float típus a finomabb sávhoz
+        "weekend_progress": 0.0,
+        "bar_color": MY_TEAM_COLOR, # ÚJ: A választott színed
+        "race_timestamp": "", # ÚJ: A pontos időpont a visszaszámláláshoz
         "tyre_h": "C1", "tyre_m": "C2", "tyre_s": "C3",
         "tyre_img_h": IMG_HARD, "tyre_img_m": IMG_MED, "tyre_img_s": IMG_SOFT,
         "d1_c": "VER", "d1_p": "0", "d2_c": "NOR", "d2_p": "0", "d3_c": "HAM", "d3_p": "0",
@@ -140,6 +144,10 @@ def main():
             start = parser.parse(f"{date_str} {clean_time}").replace(tzinfo=timezone.utc)
             end = start + timedelta(minutes=duration_min)
             sessions.append({"name": name, "start": start, "end": end})
+            
+            # HA ez a futam, elmentjük a pontos idejét a visszaszámláláshoz
+            if name == "Futam":
+                widget_data['race_timestamp'] = start.isoformat()
 
         add_session("Futam", race['date'], race['time'], 120)
         if 'Qualifying' in race: add_session("Időmérő", race['Qualifying']['date'], race['Qualifying']['time'], 60)
@@ -151,12 +159,11 @@ def main():
 
         sessions.sort(key=lambda x: x["start"])
         first_session = sessions[0]["start"]
-        last_session = sessions[-1]["end"] # A Futam vége, mivel az kezdődik legkésőbb
+        last_session = sessions[-1]["end"]
         
         widget_data['race_dates'] = format_date_range(first_session, last_session) + f", {first_session.year}"
         
-        # --- WEEKEND PROGRESS SZÁMÍTÁS (0-100%) ---
-        # Pontos számítás: (most - hétvége kezdete) / (hétvége teljes hossza)
+        # WEEKEND PROGRESS
         weekend_duration = (last_session - first_session).total_seconds()
         time_since_start = (now - first_session).total_seconds()
         
@@ -167,7 +174,6 @@ def main():
         else:
             if weekend_duration > 0:
                 prog = (time_since_start / weekend_duration) * 100
-                # Floatként menti, 2 tizedesjegy pontossággal
                 widget_data['weekend_progress'] = round(max(0.0, min(100.0, float(prog))), 2)
             else:
                 widget_data['weekend_progress'] = 0.0
