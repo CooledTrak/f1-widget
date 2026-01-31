@@ -8,10 +8,7 @@ from dateutil import parser
 WEATHER_API_KEY = "84352f72e1c7846365290f1afb251a4c"
 JSON_OUTPUT_PATH = "f1_widget_data.json"
 
-# KEDVENC CSAPAT SZÍNE (A Progress Bar ehhez igazodik)
-# McLaren: #FF8000, Ferrari: #FF1801, RedBull: #1E41FF, Mercedes: #00D2BE
-# Aston: #006F62, Williams: #00A0DE, Alpine: #FF87BC, VCARB: #6692FF
-# Audi: #F20519, Cadillac: #FFD700
+# KEDVENC CSAPAT SZÍNE (Referencia)
 MY_TEAM_COLOR = "#FF1801" 
 
 # SZEZON HATÁROK (2026)
@@ -111,7 +108,6 @@ def main():
         "schedule": "", "track_map": "", "podium_title": "",
         "weekend_progress": 0.0,
         "bar_color": MY_TEAM_COLOR,
-        "race_timestamp": "",
         "tyre_h": "C1", "tyre_m": "C2", "tyre_s": "C3",
         "tyre_img_h": IMG_HARD, "tyre_img_m": IMG_MED, "tyre_img_s": IMG_SOFT,
         "d1_c": "VER", "d1_p": "0", "d2_c": "NOR", "d2_p": "0", "d3_c": "HAM", "d3_p": "0",
@@ -146,10 +142,6 @@ def main():
             start = parser.parse(f"{date_str} {clean_time}").replace(tzinfo=timezone.utc)
             end = start + timedelta(minutes=duration_min)
             sessions.append({"name": name, "start": start, "end": end})
-            
-            # --- JAVÍTOTT DÁTUM MENTÉS (Z végződéssel) ---
-            if "Race" in name or "Futam" in name:
-                widget_data['race_timestamp'] = start.strftime('%Y-%m-%dT%H:%M:%SZ')
 
         add_session("Futam", race['date'], race['time'], 120)
         if 'Qualifying' in race: add_session("Időmérő", race['Qualifying']['date'], race['Qualifying']['time'], 60)
@@ -162,10 +154,6 @@ def main():
         sessions.sort(key=lambda x: x["start"])
         first_session = sessions[0]["start"]
         last_session = sessions[-1]["end"]
-        
-        # Biztonsági mentés, ha a Futam valamiért nem lett volna meg
-        if not widget_data['race_timestamp']:
-            widget_data['race_timestamp'] = last_session.strftime('%Y-%m-%dT%H:%M:%SZ')
         
         widget_data['race_dates'] = format_date_range(first_session, last_session) + f", {first_session.year}"
         
@@ -225,7 +213,7 @@ def main():
             widget_data['is_weekend_mode'] = 0
             widget_data['w_temp'], widget_data['w_desc'], widget_data['w_icon'], widget_data['w_wind'], widget_data['w_hum'] = get_weather()
 
-        # SZEZON PROGRESS
+        # SZEZON PROGRESS (Ez számolja a napokat)
         season_start_point = first_session
         if now < season_start_point:
             start_date = LAST_SEASON_END
@@ -236,6 +224,8 @@ def main():
                 calc_progress = int((elapsed_seconds / total_seconds) * 100)
             else:
                 calc_progress = 0
+            
+            # NAPOK SZÁMÍTÁSA
             days_left = (season_start_point - now).days
             widget_data['status_text'] = f"{days_left} NAP VAN HÁTRA"
         else:
