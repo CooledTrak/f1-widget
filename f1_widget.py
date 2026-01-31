@@ -13,10 +13,11 @@ JSON_OUTPUT_PATH = "f1_widget_data.json"
 LAST_SEASON_END = datetime(2025, 12, 8, 14, 0, 0, tzinfo=timezone.utc)
 SEASON_START_2026 = datetime(2026, 3, 6, 4, 0, 0, tzinfo=timezone.utc)
 
-# HIVATALOS PIRELLI GUMI KÉPEK (Wikimédia - Stabil linkek)
-IMG_HARD = "https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/F1_tire_Pirelli_PZero_White.svg/240px-F1_tire_Pirelli_PZero_White.svg.png"
-IMG_MED = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/F1_tire_Pirelli_PZero_Yellow.svg/240px-F1_tire_Pirelli_PZero_Yellow.svg.png"
-IMG_SOFT = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/F1_tire_Pirelli_PZero_Red.svg/240px-F1_tire_Pirelli_PZero_Red.svg.png"
+# SAJÁT KÉPEK (GitHub repóból)
+BASE_REPO_URL = "https://raw.githubusercontent.com/CooledTrak/f1-widget/main"
+IMG_HARD = f"{BASE_REPO_URL}/pirellif1pzerohard2026.png"
+IMG_MED = f"{BASE_REPO_URL}/pirellif1pzeromedium2026.png"
+IMG_SOFT = f"{BASE_REPO_URL}/pirellif1pzerosoft2026.png"
 
 # PÁLYA RAJZOK (Teljes lista)
 TRACK_MAPS = {
@@ -310,3 +311,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
