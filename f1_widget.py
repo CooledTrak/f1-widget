@@ -1,6 +1,7 @@
 import requests
 import json
 import traceback
+import os
 from datetime import datetime, timedelta, timezone
 from dateutil import parser
 
@@ -8,20 +9,20 @@ from dateutil import parser
 WEATHER_API_KEY = "84352f72e1c7846365290f1afb251a4c"
 JSON_OUTPUT_PATH = "f1_widget_data.json"
 
-# KEDVENC CSAPAT SZÍNE (Referencia)
+# KEDVENC CSAPAT SZÍNE
 MY_TEAM_COLOR = "#FF1801" 
 
 # SZEZON HATÁROK (2026)
 LAST_SEASON_END = datetime(2025, 12, 8, 14, 0, 0, tzinfo=timezone.utc)
 SEASON_START_2026 = datetime(2026, 3, 6, 4, 0, 0, tzinfo=timezone.utc)
 
-# SAJÁT KÉPEK (GitHub repóból)
+# SAJÁT KÉPEK
 BASE_REPO_URL = "https://raw.githubusercontent.com/CooledTrak/f1-widget/main"
 IMG_HARD = f"{BASE_REPO_URL}/pirellif1pzerohard2026.png"
 IMG_MED = f"{BASE_REPO_URL}/pirellif1pzeromedium2026.png"
 IMG_SOFT = f"{BASE_REPO_URL}/pirellif1pzerosoft2026.png"
 
-# PÁLYA RAJZOK
+# PÁLYA RAJZOK ÉS ADATOK
 TRACK_MAPS = {
     "albert_park": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Australia_Circuit.png.transform/8col/image.png",
     "bahrain": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Bahrain_Circuit.png.transform/8col/image.png",
@@ -101,6 +102,17 @@ def format_date_range(start_date, end_date):
     return f"{months[start_date.month - 1]} {start_date.day} - {months[end_date.month - 1]} {end_date.day}"
 
 def main():
+    print("--- ADATGYŰJTÉS INDÍTÁSA ---")
+
+    # 1. MEGLÉVŐ ADATOK BEOLVASÁSA (MEMÓRIA)
+    existing_data = {}
+    if os.path.exists(JSON_OUTPUT_PATH):
+        try:
+            with open(JSON_OUTPUT_PATH, 'r') as f:
+                existing_data = json.load(f)
+        except Exception as e:
+            print("Nem sikerült beolvasni a régi JSON-t:", e)
+
     widget_data = {
         "status_title": "F1 WIDGET", "location": "", "race_dates": "", "track_info": "",
         "w_temp": "", "w_desc": "", "w_icon": "", "w_wind": "", "w_hum": "",
@@ -114,12 +126,12 @@ def main():
         "c1_c": "MCL", "c1_p": "0", "c2_c": "RBR", "c2_p": "0", "c3_c": "FER", "c3_p": "0"
     }
 
-    print("--- ADATGYŰJTÉS INDÍTÁSA ---")
-
     try:
         next_data = get_json("https://api.jolpi.ca/ergast/f1/current/next.json")
         if not next_data:
-            with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(widget_data, f)
+            # Ha az Ergast API hal meg, írjuk vissza a régi adatokat!
+            if existing_data:
+                with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(existing_data, f)
             return
 
         race = next_data['MRData']['RaceTable']['Races'][0]
@@ -169,8 +181,6 @@ def main():
             if weekend_duration > 0:
                 prog = (time_since_start / weekend_duration) * 100
                 widget_data['weekend_progress'] = round(max(0.0, min(100.0, float(prog))), 2)
-            else:
-                widget_data['weekend_progress'] = 0.0
 
         # MENETREND SZÍNEZÉS
         schedule_text = ""
@@ -188,7 +198,7 @@ def main():
         
         widget_data['schedule'] = schedule_text.strip()
         
-        # IDŐJÁRÁS
+        # IDŐJÁRÁS (JAVÍTOTT MEMÓRIÁVAL)
         race_date = parser.parse(race['date']).date()
         friday_date = race_date - timedelta(days=2)
         today = now.date()
@@ -204,7 +214,14 @@ def main():
                     f"{round(data['wind']['speed'] * 3.6)} km/h",
                     f"{data['main']['humidity']}%"
                 )
-            return "", "", "", "", ""
+            # Ha hiba van, töltsük vissza a régi JSON-ből a legutolsó ismert időjárást!
+            return (
+                existing_data.get('w_temp', ''),
+                existing_data.get('w_desc', ''),
+                existing_data.get('w_icon', ''),
+                existing_data.get('w_wind', ''),
+                existing_data.get('w_hum', '')
+            )
 
         if friday_date <= today <= race_date:
             widget_data['is_weekend_mode'] = 1
@@ -213,7 +230,7 @@ def main():
             widget_data['is_weekend_mode'] = 0
             widget_data['w_temp'], widget_data['w_desc'], widget_data['w_icon'], widget_data['w_wind'], widget_data['w_hum'] = get_weather()
 
-        # SZEZON PROGRESS (Ez számolja a napokat)
+        # SZEZON PROGRESS
         season_start_point = first_session
         if now < season_start_point:
             start_date = LAST_SEASON_END
@@ -225,7 +242,6 @@ def main():
             else:
                 calc_progress = 0
             
-            # NAPOK SZÁMÍTÁSA
             days_left = (season_start_point - now).days
             widget_data['status_text'] = f"{days_left} NAP VAN HÁTRA"
         else:
@@ -244,8 +260,7 @@ def main():
                 if len(d_res) > 0: widget_data['d1_c'], widget_data['d1_p'] = d_res[0]['Driver']['code'], d_res[0]['points']
                 if len(d_res) > 1: widget_data['d2_c'], widget_data['d2_p'] = d_res[1]['Driver']['code'], d_res[1]['points']
                 if len(d_res) > 2: widget_data['d3_c'], widget_data['d3_p'] = d_res[2]['Driver']['code'], d_res[2]['points']
-        except Exception as e: 
-            print(f"Pilóta hiba: {e}")
+        except Exception as e: pass
 
         try:
             c_data = get_json("https://api.jolpi.ca/ergast/f1/current/constructorStandings.json")
@@ -256,8 +271,7 @@ def main():
                 if len(c_res) > 0: widget_data['c1_c'], widget_data['c1_p'] = c_res[0]['Constructor']['name'][:3].upper(), c_res[0]['points']
                 if len(c_res) > 1: widget_data['c2_c'], widget_data['c2_p'] = c_res[1]['Constructor']['name'][:3].upper(), c_res[1]['points']
                 if len(c_res) > 2: widget_data['c3_c'], widget_data['c3_p'] = c_res[2]['Constructor']['name'][:3].upper(), c_res[2]['points']
-        except Exception as e: 
-            print(f"Konstruktőr hiba: {e}")
+        except Exception as e: pass
 
     except Exception as e:
         traceback.print_exc()
