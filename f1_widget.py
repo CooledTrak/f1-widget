@@ -3,7 +3,7 @@ import json
 import traceback
 import os
 from datetime import datetime, timedelta, timezone
-from dateutil import parser
+from dateutil import parser, tz
 
 # --- BEÁLLÍTÁSOK ---
 WEATHER_API_KEY = "84352f72e1c7846365290f1afb251a4c"
@@ -22,7 +22,7 @@ IMG_HARD = f"{BASE_REPO_URL}/pirellif1pzerohard2026.png"
 IMG_MED = f"{BASE_REPO_URL}/pirellif1pzeromedium2026.png"
 IMG_SOFT = f"{BASE_REPO_URL}/pirellif1pzerosoft2026.png"
 
-# PÁLYA RAJZOK ÉS ADATOK
+# PÁLYA RAJZOK
 TRACK_MAPS = {
     "albert_park": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Australia_Circuit.png.transform/8col/image.png",
     "bahrain": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Bahrain_Circuit.png.transform/8col/image.png",
@@ -104,7 +104,6 @@ def format_date_range(start_date, end_date):
 def main():
     print("--- ADATGYŰJTÉS INDÍTÁSA ---")
 
-    # 1. MEGLÉVŐ ADATOK BEOLVASÁSA (MEMÓRIA)
     existing_data = {}
     if os.path.exists(JSON_OUTPUT_PATH):
         try:
@@ -129,7 +128,6 @@ def main():
     try:
         next_data = get_json("https://api.jolpi.ca/ergast/f1/current/next.json")
         if not next_data:
-            # Ha az Ergast API hal meg, írjuk vissza a régi adatokat!
             if existing_data:
                 with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(existing_data, f)
             return
@@ -182,10 +180,12 @@ def main():
                 prog = (time_since_start / weekend_duration) * 100
                 widget_data['weekend_progress'] = round(max(0.0, min(100.0, float(prog))), 2)
 
-        # MENETREND SZÍNEZÉS
+        # --- JAVÍTOTT MENETREND SZÍNEZÉS (KÖZÉP-EURÓPAI IDŐZÓNA) ---
         schedule_text = ""
+        budapest_tz = tz.gettz('Europe/Budapest') # Beállítjuk a fix Budapesti zónát
+        
         for s in sessions:
-            local_time = s["start"].astimezone()
+            local_time = s["start"].astimezone(budapest_tz) # Átváltjuk a mentett UTC időt Budapesti időre
             day_name = ["Hé", "Ke", "Sze", "Cs", "Pé", "Szo", "Va"][local_time.weekday()]
             time_str = local_time.strftime("%H:%M")
             
@@ -198,7 +198,7 @@ def main():
         
         widget_data['schedule'] = schedule_text.strip()
         
-        # IDŐJÁRÁS (JAVÍTOTT MEMÓRIÁVAL)
+        # IDŐJÁRÁS (MEMÓRIÁVAL)
         race_date = parser.parse(race['date']).date()
         friday_date = race_date - timedelta(days=2)
         today = now.date()
@@ -214,7 +214,6 @@ def main():
                     f"{round(data['wind']['speed'] * 3.6)} km/h",
                     f"{data['main']['humidity']}%"
                 )
-            # Ha hiba van, töltsük vissza a régi JSON-ből a legutolsó ismert időjárást!
             return (
                 existing_data.get('w_temp', ''),
                 existing_data.get('w_desc', ''),
