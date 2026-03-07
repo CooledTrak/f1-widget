@@ -2,7 +2,7 @@ name: Update F1 Data
 
 on:
   schedule:
-    - cron: '0 * * * *' # Minden órában futtatja
+    - cron: '*/15 * * * *' # Minden órában futtatja
   workflow_dispatch: # Kézzel is indítható
 
 jobs:
