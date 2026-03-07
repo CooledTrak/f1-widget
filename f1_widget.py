@@ -22,7 +22,7 @@ IMG_HARD = f"{BASE_REPO_URL}/pirellif1pzerohard2026.png"
 IMG_MED = f"{BASE_REPO_URL}/pirellif1pzeromedium2026.png"
 IMG_SOFT = f"{BASE_REPO_URL}/pirellif1pzerosoft2026.png"
 
-# PÁLYA RAJZOK
+# PÁLYA RAJZOK ÉS ADATOK (NE FELEJTSD EL A SAJÁTODDAL KIEGÉSZÍTENI HA RÖVIDÍTVE VAN!)
 TRACK_MAPS = {
     "albert_park": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Australia_Circuit.png.transform/8col/image.png",
     "bahrain": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Bahrain_Circuit.png.transform/8col/image.png",
@@ -104,6 +104,7 @@ def format_date_range(start_date, end_date):
 def main():
     print("--- ADATGYŰJTÉS INDÍTÁSA ---")
 
+    # MEGLÉVŐ ADATOK BEOLVASÁSA (MEMÓRIA)
     existing_data = {}
     if os.path.exists(JSON_OUTPUT_PATH):
         try:
@@ -180,12 +181,12 @@ def main():
                 prog = (time_since_start / weekend_duration) * 100
                 widget_data['weekend_progress'] = round(max(0.0, min(100.0, float(prog))), 2)
 
-        # --- JAVÍTOTT MENETREND SZÍNEZÉS (KÖZÉP-EURÓPAI IDŐZÓNA) ---
+        # MENETREND SZÍNEZÉS (KÖZÉP-EURÓPAI IDŐZÓNA)
         schedule_text = ""
-        budapest_tz = tz.gettz('Europe/Budapest') # Beállítjuk a fix Budapesti zónát
+        budapest_tz = tz.gettz('Europe/Budapest')
         
         for s in sessions:
-            local_time = s["start"].astimezone(budapest_tz) # Átváltjuk a mentett UTC időt Budapesti időre
+            local_time = s["start"].astimezone(budapest_tz)
             day_name = ["Hé", "Ke", "Sze", "Cs", "Pé", "Szo", "Va"][local_time.weekday()]
             time_str = local_time.strftime("%H:%M")
             
@@ -198,7 +199,7 @@ def main():
         
         widget_data['schedule'] = schedule_text.strip()
         
-        # IDŐJÁRÁS (MEMÓRIÁVAL)
+        # IDŐJÁRÁS (AGRESSZÍV MEMÓRIÁVAL)
         race_date = parser.parse(race['date']).date()
         friday_date = race_date - timedelta(days=2)
         today = now.date()
@@ -206,7 +207,9 @@ def main():
         def get_weather():
             url = f"https://api.openweathermap.org/data/2.5/weather?lat={race['Circuit']['Location']['lat']}&lon={race['Circuit']['Location']['long']}&appid={WEATHER_API_KEY}&units=metric&lang=hu"
             data = get_json(url)
-            if data:
+            
+            # 1. Ha van sikeres friss adat
+            if data and 'main' in data:
                 return (
                     f"{round(data['main']['temp'])}°C",
                     data['weather'][0]['description'].capitalize(),
@@ -214,13 +217,20 @@ def main():
                     f"{round(data['wind']['speed'] * 3.6)} km/h",
                     f"{data['main']['humidity']}%"
                 )
-            return (
-                existing_data.get('w_temp', ''),
-                existing_data.get('w_desc', ''),
-                existing_data.get('w_icon', ''),
-                existing_data.get('w_wind', ''),
-                existing_data.get('w_hum', '')
-            )
+            
+            # 2. Ha az API hibát dobott, de van régi adat a memóriában
+            mem_temp = existing_data.get('w_temp', '')
+            if mem_temp != "" and mem_temp != "--°C":
+                return (
+                    mem_temp,
+                    existing_data.get('w_desc', ''),
+                    existing_data.get('w_icon', ''),
+                    existing_data.get('w_wind', ''),
+                    existing_data.get('w_hum', '')
+                )
+            
+            # 3. Ha semmi nem jött össze (hogy ne tűnjön el a widget szövege)
+            return ("--°C", "Adatfrissítés...", "", "-- km/h", "--%")
 
         if friday_date <= today <= race_date:
             widget_data['is_weekend_mode'] = 1
