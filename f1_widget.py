@@ -182,7 +182,7 @@ def main():
                 widget_data['weekend_progress'] = round(max(0.0, min(100.0, float(prog))), 2)
 
         # MENETREND SZÍNEZÉS (KÖZÉP-EURÓPAI IDŐZÓNA)
-        # --- JAVÍTOTT MENETREND SZÍNEZÉS ÉS LIVE STÁTUSZ ---
+        # --- MENETREND SZÍNEZÉS ÉS LIVE STÁTUSZ ---
         schedule_text = ""
         budapest_tz = tz.gettz('Europe/Budapest')
         is_live_now = 0 # Alapértelmezett: Nincs élő esemény
@@ -245,18 +245,38 @@ def main():
 
         # SZEZON PROGRESS
         season_start_point = first_session
+        budapest_tz = tz.gettz('Europe/Budapest')
+        
         if now < season_start_point:
+            # 1. Megkeresi az előző futamot!
             start_date = LAST_SEASON_END
-            end_date = season_start_point
-            total_seconds = (end_date - start_date).total_seconds()
+            try:
+                last_data = get_json("https://api.jolpi.ca/ergast/f1/current/last.json")
+                if last_data and last_data['MRData']['RaceTable']['Races']:
+                    last_race = last_data['MRData']['RaceTable']['Races'][0]
+                    last_time = last_race.get('time', '00:00:00Z').replace('Z', '')
+                    last_date = parser.parse(f"{last_race['date']} {last_time}").replace(tzinfo=timezone.utc)
+                    
+                    # Ha az utolsó verseny idén volt (szezon közben vagyunk)
+                    if last_date.year == now.year:
+                        start_date = last_date + timedelta(hours=2) # A futam vége
+            except Exception as e:
+                pass
+
+            total_seconds = (season_start_point - start_date).total_seconds()
             elapsed_seconds = (now - start_date).total_seconds()
+            
             if total_seconds > 0:
                 calc_progress = int((elapsed_seconds / total_seconds) * 100)
             else:
                 calc_progress = 0
             
-            days_left = (season_start_point - now).days
-            widget_data['status_text'] = f"{days_left} NAP VAN HÁTRA"
+            # 2. Napok pontos számítása (Naptári napok alapján, magyar idő szerint!)
+            today_date = now.astimezone(budapest_tz).date()
+            first_session_date = season_start_point.astimezone(budapest_tz).date()
+            days_left = (first_session_date - today_date).days
+            
+            widget_data['status_text'] = f"{max(0, days_left)} NAP VAN HÁTRA"
         else:
             calc_progress = 50
             widget_data['status_text'] = "VERSENYHÉTVÉGE"
