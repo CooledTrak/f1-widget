@@ -22,7 +22,7 @@ IMG_HARD = f"{BASE_REPO_URL}/pirellif1pzerohard2026.png"
 IMG_MED = f"{BASE_REPO_URL}/pirellif1pzeromedium2026.png"
 IMG_SOFT = f"{BASE_REPO_URL}/pirellif1pzerosoft2026.png"
 
-# PÁLYA RAJZOK ÉS ADATOK (NE FELEJTSD EL A SAJÁTODDAL KIEGÉSZÍTENI HA RÖVIDÍTVE VAN!)
+# PÁLYA RAJZOK ÉS ADATOK
 TRACK_MAPS = {
     "albert_park": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Australia_Circuit.png.transform/8col/image.png",
     "bahrain": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Bahrain_Circuit.png.transform/8col/image.png",
@@ -182,8 +182,10 @@ def main():
                 widget_data['weekend_progress'] = round(max(0.0, min(100.0, float(prog))), 2)
 
         # MENETREND SZÍNEZÉS (KÖZÉP-EURÓPAI IDŐZÓNA)
+        # --- JAVÍTOTT MENETREND SZÍNEZÉS ÉS LIVE STÁTUSZ ---
         schedule_text = ""
         budapest_tz = tz.gettz('Europe/Budapest')
+        is_live_now = 0 # Alapértelmezett: Nincs élő esemény
         
         for s in sessions:
             local_time = s["start"].astimezone(budapest_tz)
@@ -194,12 +196,14 @@ def main():
                 schedule_text += f"[c=#70FFFFFF]{day_name} {time_str} | {s['name']}[/c]\n"
             elif s["start"] <= now <= s["end"]: 
                 schedule_text += f"[c=#00FF00][b]{day_name} {time_str} | {s['name']}[/b][/c]\n"
+                is_live_now = 1 # AKTÍV ESEMÉNYT TALÁLT, BEKAPCSOLJA A KERETET!
             else: 
                 schedule_text += f"{day_name} {time_str} | {s['name']}\n"
         
         widget_data['schedule'] = schedule_text.strip()
+        widget_data['is_live'] = is_live_now # Elmenti a JSON fájlba
         
-        # IDŐJÁRÁS (AGRESSZÍV MEMÓRIÁVAL)
+        # IDŐJÁRÁS (MEMÓRIÁVAL)
         race_date = parser.parse(race['date']).date()
         friday_date = race_date - timedelta(days=2)
         today = now.date()
