@@ -8,21 +8,17 @@ from dateutil import parser, tz
 # --- BEÁLLÍTÁSOK ---
 WEATHER_API_KEY = "84352f72e1c7846365290f1afb251a4c"
 JSON_OUTPUT_PATH = "f1_widget_data.json"
-
-# KEDVENC CSAPAT SZÍNE
 MY_TEAM_COLOR = "#FF1801" 
 
-# SZEZON HATÁROK (2026)
 LAST_SEASON_END = datetime(2025, 12, 8, 14, 0, 0, tzinfo=timezone.utc)
 SEASON_START_2026 = datetime(2026, 3, 6, 4, 0, 0, tzinfo=timezone.utc)
 
-# SAJÁT KÉPEK
 BASE_REPO_URL = "https://raw.githubusercontent.com/CooledTrak/f1-widget/main"
 IMG_HARD = f"{BASE_REPO_URL}/pirellif1pzerohard2026.png"
 IMG_MED = f"{BASE_REPO_URL}/pirellif1pzeromedium2026.png"
 IMG_SOFT = f"{BASE_REPO_URL}/pirellif1pzerosoft2026.png"
 
-# PÁLYA RAJZOK ÉS ADATOK
+# PÁLYA RAJZOK ÉS ADATOK (Másold be a teljes saját listádat ide, ha le van rövidítve!)
 TRACK_MAPS = {
     "albert_park": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Australia_Circuit.png.transform/8col/image.png",
     "bahrain": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Bahrain_Circuit.png.transform/8col/image.png",
@@ -110,79 +106,101 @@ def main():
         try:
             with open(JSON_OUTPUT_PATH, 'r') as f:
                 existing_data = json.load(f)
-        except Exception as e:
-            print("Nem sikerült beolvasni a régi JSON-t:", e)
+        except Exception: pass
 
     widget_data = {
         "status_title": "F1 WIDGET", "location": "", "race_dates": "", "track_info": "",
         "w_temp": "", "w_desc": "", "w_icon": "", "w_wind": "", "w_hum": "",
         "status_text": "ADATOK...", "is_weekend_mode": 0, "is_live": 0, "progress": 0,
         "schedule": "", "track_map": "", "podium_title": "",
-        "weekend_progress": 0.0,
-        "bar_color": MY_TEAM_COLOR,
+        "weekend_progress": 0.0, "bar_color": MY_TEAM_COLOR,
         "tyre_h": "C1", "tyre_m": "C2", "tyre_s": "C3",
         "tyre_img_h": IMG_HARD, "tyre_img_m": IMG_MED, "tyre_img_s": IMG_SOFT,
         "d1_c": "VER", "d1_p": "0", "d2_c": "NOR", "d2_p": "0", "d3_c": "HAM", "d3_p": "0",
-        "c1_c": "MCL", "c1_p": "0", "c2_c": "RBR", "c2_p": "0", "c3_c": "FER", "c3_p": "0"
+        "c1_c": "MCL", "c1_p": "0", "c2_c": "RBR", "c2_p": "0", "c3_c": "FER", "c3_p": "0",
+        "cached_sessions": [] # Menetrend memória
     }
+
+    # Ha van régi menetrend, azonnal átmenti
+    if existing_data and "cached_sessions" in existing_data:
+        widget_data["cached_sessions"] = existing_data["cached_sessions"]
 
     try:
         next_data = get_json("https://api.jolpi.ca/ergast/f1/current/next.json")
-        if not next_data:
-            if existing_data:
-                with open(JSON_OUTPUT_PATH, 'w') as f: json.dump(existing_data, f)
-            return
-
-        race = next_data['MRData']['RaceTable']['Races'][0]
-        circuit_id = race['Circuit']['circuitId']
-        
-        widget_data['status_title'] = race['raceName'].replace("Grand Prix", "GP").upper()
-        widget_data['location'] = race['Circuit']['Location']['locality'].upper()
-
-        if circuit_id in TRACK_MAPS: widget_data['track_map'] = TRACK_MAPS[circuit_id]
-        if circuit_id in TRACK_SPECS: widget_data['track_info'] = TRACK_SPECS[circuit_id]
-        if circuit_id in TYRE_ALLOCATIONS:
-            alloc = TYRE_ALLOCATIONS[circuit_id]
-            widget_data['tyre_h'], widget_data['tyre_m'], widget_data['tyre_s'] = alloc[0], alloc[1], alloc[2]
-        
         now = datetime.now(timezone.utc)
         sessions = []
-        
-        def add_session(name, date_str, time_str, duration_min):
-            clean_time = time_str.replace("Z", "")
-            start = parser.parse(f"{date_str} {clean_time}").replace(tzinfo=timezone.utc)
-            end = start + timedelta(minutes=duration_min)
-            sessions.append({"name": name, "start": start, "end": end})
 
-        add_session("Futam", race['date'], race['time'], 120)
-        if 'Qualifying' in race: add_session("Időmérő", race['Qualifying']['date'], race['Qualifying']['time'], 60)
-        if 'FirstPractice' in race: add_session("1. Edzés", race['FirstPractice']['date'], race['FirstPractice']['time'], 60)
-        if 'SecondPractice' in race: add_session("2. Edzés", race['SecondPractice']['date'], race['SecondPractice']['time'], 60)
-        if 'ThirdPractice' in race: add_session("3. Edzés", race['ThirdPractice']['date'], race['ThirdPractice']['time'], 60)
-        if 'Sprint' in race: add_session("Sprint", race['Sprint']['date'], race['Sprint']['time'], 60)
-        if 'SprintQualifying' in race: add_session("Sprint Q", race['SprintQualifying']['date'], race['SprintQualifying']['time'], 45)
+        if next_data and 'MRData' in next_data and len(next_data['MRData']['RaceTable']['Races']) > 0:
+            print("Ergast API online, adatok frissítése...")
+            race = next_data['MRData']['RaceTable']['Races'][0]
+            circuit_id = race['Circuit']['circuitId']
+            
+            widget_data['status_title'] = race['raceName'].replace("Grand Prix", "GP").upper()
+            widget_data['location'] = race['Circuit']['Location']['locality'].upper()
 
-        sessions.sort(key=lambda x: x["start"])
+            if circuit_id in TRACK_MAPS: widget_data['track_map'] = TRACK_MAPS[circuit_id]
+            if circuit_id in TRACK_SPECS: widget_data['track_info'] = TRACK_SPECS[circuit_id]
+            if circuit_id in TYRE_ALLOCATIONS:
+                alloc = TYRE_ALLOCATIONS[circuit_id]
+                widget_data['tyre_h'], widget_data['tyre_m'], widget_data['tyre_s'] = alloc[0], alloc[1], alloc[2]
+            
+            def add_session(name, date_str, time_str, duration_min):
+                clean_time = time_str.replace("Z", "")
+                start = parser.parse(f"{date_str} {clean_time}").replace(tzinfo=timezone.utc)
+                end = start + timedelta(minutes=duration_min)
+                sessions.append({"name": name, "start": start, "end": end})
+
+            add_session("Futam", race['date'], race.get('time', '00:00:00Z'), 120)
+            if 'Qualifying' in race: add_session("Időmérő", race['Qualifying']['date'], race['Qualifying'].get('time', '00:00:00Z'), 60)
+            if 'FirstPractice' in race: add_session("1. Edzés", race['FirstPractice']['date'], race['FirstPractice'].get('time', '00:00:00Z'), 60)
+            if 'SecondPractice' in race: add_session("2. Edzés", race['SecondPractice']['date'], race['SecondPractice'].get('time', '00:00:00Z'), 60)
+            if 'ThirdPractice' in race: add_session("3. Edzés", race['ThirdPractice']['date'], race['ThirdPractice'].get('time', '00:00:00Z'), 60)
+            if 'Sprint' in race: add_session("Sprint", race['Sprint']['date'], race['Sprint'].get('time', '00:00:00Z'), 60)
+            if 'SprintQualifying' in race: add_session("Sprint Q", race['SprintQualifying']['date'], race['SprintQualifying'].get('time', '00:00:00Z'), 45)
+
+            sessions.sort(key=lambda x: x["start"])
+            
+            # Memória frissítése
+            widget_data["cached_sessions"] = []
+            for s in sessions:
+                widget_data["cached_sessions"].append({
+                    "name": s["name"], "start": s["start"].isoformat(), "end": s["end"].isoformat()
+                })
+                
+        else:
+            print("API Hiba! Visszatöltés a memóriából...")
+            if existing_data and "cached_sessions" in existing_data and len(existing_data["cached_sessions"]) > 0:
+                for s in existing_data["cached_sessions"]:
+                    sessions.append({
+                        "name": s["name"],
+                        "start": parser.parse(s["start"]),
+                        "end": parser.parse(s["end"])
+                    })
+                # Visszatölti a fix adatokat is
+                for key in ["status_title", "location", "track_info", "track_map", "tyre_h", "tyre_m", "tyre_s", "w_temp", "w_desc", "w_icon", "w_wind", "w_hum"]:
+                    if key in existing_data: widget_data[key] = existing_data[key]
+            else:
+                print("Nincs memória, kilépés.")
+                return
+
+        if not sessions: return
+
+        # --- IDŐ ÉS LIVE SZÁMÍTÁSOK (Mindig lefutnak!) ---
         first_session = sessions[0]["start"]
         last_session = sessions[-1]["end"]
-        
         widget_data['race_dates'] = format_date_range(first_session, last_session) + f", {first_session.year}"
         
         # WEEKEND PROGRESS
         weekend_duration = (last_session - first_session).total_seconds()
         time_since_start = (now - first_session).total_seconds()
-        
-        if now < first_session:
-            widget_data['weekend_progress'] = 0.0
-        elif now > last_session:
-            widget_data['weekend_progress'] = 100.0
+        if now < first_session: widget_data['weekend_progress'] = 0.0
+        elif now > last_session: widget_data['weekend_progress'] = 100.0
         else:
             if weekend_duration > 0:
                 prog = (time_since_start / weekend_duration) * 100
                 widget_data['weekend_progress'] = round(max(0.0, min(100.0, float(prog))), 2)
 
-        # MENETREND SZÍNEZÉS (KÖZÉP-EURÓPAI IDŐZÓNA)
-        # --- MENETREND SZÍNEZÉS ÉS LIVE STÁTUSZ ---
+        # MENETREND SZÍNEZÉS ÉS LIVE (KÖZÉP-EURÓPAI IDŐZÓNA)
         schedule_text = ""
         budapest_tz = tz.gettz('Europe/Budapest')
         is_live_now = 0 # Alapértelmezett: Nincs élő esemény
@@ -202,53 +220,10 @@ def main():
         
         widget_data['schedule'] = schedule_text.strip()
         widget_data['is_live'] = is_live_now # Elmenti a JSON fájlba
-        
-        # IDŐJÁRÁS (MEMÓRIÁVAL)
-        race_date = parser.parse(race['date']).date()
-        friday_date = race_date - timedelta(days=2)
-        today = now.date()
 
-        def get_weather():
-            url = f"https://api.openweathermap.org/data/2.5/weather?lat={race['Circuit']['Location']['lat']}&lon={race['Circuit']['Location']['long']}&appid={WEATHER_API_KEY}&units=metric&lang=hu"
-            data = get_json(url)
-            
-            # 1. Ha van sikeres friss adat
-            if data and 'main' in data:
-                return (
-                    f"{round(data['main']['temp'])}°C",
-                    data['weather'][0]['description'].capitalize(),
-                    data['weather'][0]['icon'],
-                    f"{round(data['wind']['speed'] * 3.6)} km/h",
-                    f"{data['main']['humidity']}%"
-                )
-            
-            # 2. Ha az API hibát dobott, de van régi adat a memóriában
-            mem_temp = existing_data.get('w_temp', '')
-            if mem_temp != "" and mem_temp != "--°C":
-                return (
-                    mem_temp,
-                    existing_data.get('w_desc', ''),
-                    existing_data.get('w_icon', ''),
-                    existing_data.get('w_wind', ''),
-                    existing_data.get('w_hum', '')
-                )
-            
-            # 3. Ha semmi nem jött össze (hogy ne tűnjön el a widget szövege)
-            return ("--°C", "Adatfrissítés...", "", "-- km/h", "--%")
-
-        if friday_date <= today <= race_date:
-            widget_data['is_weekend_mode'] = 1
-            widget_data['w_temp'], widget_data['w_desc'], widget_data['w_icon'], widget_data['w_wind'], widget_data['w_hum'] = get_weather()
-        else:
-            widget_data['is_weekend_mode'] = 0
-            widget_data['w_temp'], widget_data['w_desc'], widget_data['w_icon'], widget_data['w_wind'], widget_data['w_hum'] = get_weather()
-
-        # SZEZON PROGRESS
+        # SZEZON PROGRESS ÉS NAPOK
         season_start_point = first_session
-        budapest_tz = tz.gettz('Europe/Budapest')
-        
         if now < season_start_point:
-            # 1. Megkeresi az előző futamot!
             start_date = LAST_SEASON_END
             try:
                 last_data = get_json("https://api.jolpi.ca/ergast/f1/current/last.json")
@@ -256,22 +231,14 @@ def main():
                     last_race = last_data['MRData']['RaceTable']['Races'][0]
                     last_time = last_race.get('time', '00:00:00Z').replace('Z', '')
                     last_date = parser.parse(f"{last_race['date']} {last_time}").replace(tzinfo=timezone.utc)
-                    
-                    # Ha az utolsó verseny idén volt (szezon közben vagyunk)
-                    if last_date.year == now.year:
-                        start_date = last_date + timedelta(hours=2) # A futam vége
-            except Exception as e:
-                pass
+                    if last_date.year == now.year: start_date = last_date + timedelta(hours=2)
+            except: pass
 
             total_seconds = (season_start_point - start_date).total_seconds()
             elapsed_seconds = (now - start_date).total_seconds()
+            if total_seconds > 0: calc_progress = int((elapsed_seconds / total_seconds) * 100)
+            else: calc_progress = 0
             
-            if total_seconds > 0:
-                calc_progress = int((elapsed_seconds / total_seconds) * 100)
-            else:
-                calc_progress = 0
-            
-            # 2. Napok pontos számítása (Naptári napok alapján, magyar idő szerint!)
             today_date = now.astimezone(budapest_tz).date()
             first_session_date = season_start_point.astimezone(budapest_tz).date()
             days_left = (first_session_date - today_date).days
@@ -282,29 +249,37 @@ def main():
             widget_data['status_text'] = "VERSENYHÉTVÉGE"
         
         widget_data['progress'] = max(0, min(100, calc_progress))
-        
-        # BAJNOKSÁG
+
+        # IDŐJÁRÁS (Ha még nincs benne a memóriából)
+        if not widget_data['w_temp'] and 'MRData' in locals() and 'Circuit' in race:
+            race_date = parser.parse(race['date']).date()
+            friday_date = race_date - timedelta(days=2)
+            today = now.astimezone(budapest_tz).date()
+            
+            url = f"https://api.openweathermap.org/data/2.5/weather?lat={race['Circuit']['Location']['lat']}&lon={race['Circuit']['Location']['long']}&appid={WEATHER_API_KEY}&units=metric&lang=hu"
+            data = get_json(url)
+            if data and 'main' in data:
+                widget_data['w_temp'] = f"{round(data['main']['temp'])}°C"
+                widget_data['w_desc'] = data['weather'][0]['description'].capitalize()
+                widget_data['w_icon'] = data['weather'][0]['icon']
+                widget_data['w_wind'] = f"{round(data['wind']['speed'] * 3.6)} km/h"
+                widget_data['w_hum'] = f"{data['main']['humidity']}%"
+                
+            if friday_date <= today <= race_date: widget_data['is_weekend_mode'] = 1
+            else: widget_data['is_weekend_mode'] = 0
+
+        # BAJNOKSÁG (Kibővítve memóriával, ha az Ergast halott lenne)
         try:
             d_data = get_json("https://api.jolpi.ca/ergast/f1/current/driverStandings.json")
-            if not d_data or not d_data['MRData']['StandingsTable']['StandingsLists']:
-                 d_data = get_json(f"https://api.jolpi.ca/ergast/f1/{now.year-1}/driverStandings.json")
             if d_data and d_data['MRData']['StandingsTable']['StandingsLists']:
                 d_res = d_data['MRData']['StandingsTable']['StandingsLists'][0]['DriverStandings']
                 if len(d_res) > 0: widget_data['d1_c'], widget_data['d1_p'] = d_res[0]['Driver']['code'], d_res[0]['points']
                 if len(d_res) > 1: widget_data['d2_c'], widget_data['d2_p'] = d_res[1]['Driver']['code'], d_res[1]['points']
                 if len(d_res) > 2: widget_data['d3_c'], widget_data['d3_p'] = d_res[2]['Driver']['code'], d_res[2]['points']
-        except Exception as e: pass
-
-        try:
-            c_data = get_json("https://api.jolpi.ca/ergast/f1/current/constructorStandings.json")
-            if not c_data or not c_data['MRData']['StandingsTable']['StandingsLists']:
-                 c_data = get_json(f"https://api.jolpi.ca/ergast/f1/{now.year-1}/constructorStandings.json")
-            if c_data and c_data['MRData']['StandingsTable']['StandingsLists']:
-                c_res = c_data['MRData']['StandingsTable']['StandingsLists'][0]['ConstructorStandings']
-                if len(c_res) > 0: widget_data['c1_c'], widget_data['c1_p'] = c_res[0]['Constructor']['name'][:3].upper(), c_res[0]['points']
-                if len(c_res) > 1: widget_data['c2_c'], widget_data['c2_p'] = c_res[1]['Constructor']['name'][:3].upper(), c_res[1]['points']
-                if len(c_res) > 2: widget_data['c3_c'], widget_data['c3_p'] = c_res[2]['Constructor']['name'][:3].upper(), c_res[2]['points']
-        except Exception as e: pass
+            else:
+                for key in ["d1_c", "d1_p", "d2_c", "d2_p", "d3_c", "d3_p"]:
+                    if key in existing_data: widget_data[key] = existing_data[key]
+        except Exception: pass
 
     except Exception as e:
         traceback.print_exc()
