@@ -18,7 +18,7 @@ IMG_HARD = f"{BASE_REPO_URL}/pirellif1pzerohard2026.png"
 IMG_MED = f"{BASE_REPO_URL}/pirellif1pzeromedium2026.png"
 IMG_SOFT = f"{BASE_REPO_URL}/pirellif1pzerosoft2026.png"
 
-# PÁLYA RAJZOK ÉS ADATOK (Ne felejtsd el a saját teljes listádat visszamásolni ide!)
+# PÁLYA RAJZOK ÉS ADATOK
 TRACK_MAPS = {
     "albert_park": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Australia_Circuit.png.transform/8col/image.png",
     "bahrain": "https://media.formula1.com/content/dam/fom-website/2018-redesign-assets/Circuit%20maps%2016x9/Bahrain_Circuit.png.transform/8col/image.png",
@@ -117,13 +117,14 @@ def main():
         "tyre_img_h": IMG_HARD, "tyre_img_m": IMG_MED, "tyre_img_s": IMG_SOFT,
         "d1_c": "VER", "d1_p": "0", "d2_c": "NOR", "d2_p": "0", "d3_c": "HAM", "d3_p": "0",
         "c1_c": "MCL", "c1_p": "0", "c2_c": "RBR", "c2_p": "0", "c3_c": "FER", "c3_p": "0",
-        "cached_sessions": [] 
+        "cached_sessions": [],
+        "live_start": 0, "live_end": 0  # ÚJ: A pontos időzítő adatai
     }
 
     if existing_data and "cached_sessions" in existing_data:
         widget_data["cached_sessions"] = existing_data["cached_sessions"]
 
-    race = None # Biztonságos változó deklaráció
+    race = None
     now = datetime.now(timezone.utc)
     sessions = []
 
@@ -131,7 +132,6 @@ def main():
         next_data = get_json("https://api.jolpi.ca/ergast/f1/current/next.json")
 
         if next_data and 'MRData' in next_data and len(next_data['MRData']['RaceTable']['Races']) > 0:
-            print("Ergast API online, adatok frissítése...")
             race = next_data['MRData']['RaceTable']['Races'][0]
             circuit_id = race['Circuit']['circuitId']
             
@@ -167,7 +167,6 @@ def main():
                 })
                 
         else:
-            print("API Hiba! Visszatöltés a memóriából...")
             if existing_data and "cached_sessions" in existing_data and len(existing_data["cached_sessions"]) > 0:
                 for s in existing_data["cached_sessions"]:
                     sessions.append({
@@ -182,12 +181,27 @@ def main():
 
         if not sessions: return
 
+        # --- PONTOS MÁSODPERC IDŐZÍTŐ A KWGT-NEK ---
+        current_epoch = int(now.timestamp())
+        live_start_epoch = 0
+        live_end_epoch = 0
+        
+        for s in sessions:
+            start_epoch = int(s["start"].timestamp())
+            end_epoch = int(s["end"].timestamp())
+            if end_epoch > current_epoch:
+                live_start_epoch = start_epoch
+                live_end_epoch = end_epoch
+                break
+
+        widget_data['live_start'] = live_start_epoch
+        widget_data['live_end'] = live_end_epoch
+        
         # --- IDŐ ÉS LIVE SZÁMÍTÁSOK ---
         first_session = sessions[0]["start"]
         last_session = sessions[-1]["end"]
         widget_data['race_dates'] = format_date_range(first_session, last_session) + f", {first_session.year}"
         
-        # WEEKEND PROGRESS
         weekend_duration = (last_session - first_session).total_seconds()
         time_since_start = (now - first_session).total_seconds()
         if now < first_session: widget_data['weekend_progress'] = 0.0
@@ -197,10 +211,9 @@ def main():
                 prog = (time_since_start / weekend_duration) * 100
                 widget_data['weekend_progress'] = round(max(0.0, min(100.0, float(prog))), 2)
 
-        # MENETREND SZÍNEZÉS ÉS LIVE
+        # MENETREND SZÍNEZÉS
         schedule_text = ""
         budapest_tz = tz.gettz('Europe/Budapest')
-        is_live_now = 0
         
         for s in sessions:
             local_time = s["start"].astimezone(budapest_tz)
@@ -211,12 +224,10 @@ def main():
                 schedule_text += f"[c=#70FFFFFF]{day_name} {time_str} | {s['name']}[/c]\n"
             elif s["start"] <= now <= s["end"]: 
                 schedule_text += f"[c=#00FF00][b]{day_name} {time_str} | {s['name']}[/b][/c]\n"
-                is_live_now = 1
             else: 
                 schedule_text += f"{day_name} {time_str} | {s['name']}\n"
         
         widget_data['schedule'] = schedule_text.strip()
-        widget_data['is_live'] = is_live_now
 
         # SZEZON PROGRESS ÉS NAPOK
         season_start_point = first_session
@@ -247,15 +258,12 @@ def main():
         
         widget_data['progress'] = max(0, min(100, calc_progress))
 
-        # --- JAVÍTOTT: IS_WEEKEND_MODE ÉS IDŐJÁRÁS ---
         today_date = now.astimezone(budapest_tz).date()
         first_session_date = first_session.astimezone(budapest_tz).date()
         last_session_date = last_session.astimezone(budapest_tz).date()
         
-        if first_session_date <= today_date <= last_session_date:
-            widget_data['is_weekend_mode'] = 1
-        else:
-            widget_data['is_weekend_mode'] = 0
+        if first_session_date <= today_date <= last_session_date: widget_data['is_weekend_mode'] = 1
+        else: widget_data['is_weekend_mode'] = 0
 
         if race and 'Circuit' in race:
             try:
@@ -269,7 +277,6 @@ def main():
                     widget_data['w_hum'] = f"{data['main']['humidity']}%"
             except: pass
             
-        # Ha a frissítés nem sikerült, memóriából töltjük vissza
         if not widget_data['w_temp'] and existing_data:
             widget_data['w_temp'] = existing_data.get('w_temp', '')
             widget_data['w_desc'] = existing_data.get('w_desc', '')
