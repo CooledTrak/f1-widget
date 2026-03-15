@@ -286,7 +286,11 @@ def main():
 
         # BAJNOKSÁG
         try:
+            # --- Egyéni ---
             d_data = get_json("https://api.jolpi.ca/ergast/f1/current/driverStandings.json")
+            if not d_data or not d_data['MRData']['StandingsTable']['StandingsLists']:
+                 d_data = get_json(f"https://api.jolpi.ca/ergast/f1/{now.year-1}/driverStandings.json") # Ha év eleje van, hozza a tavalyit
+            
             if d_data and d_data['MRData']['StandingsTable']['StandingsLists']:
                 d_res = d_data['MRData']['StandingsTable']['StandingsLists'][0]['DriverStandings']
                 if len(d_res) > 0: widget_data['d1_c'], widget_data['d1_p'] = d_res[0]['Driver']['code'], d_res[0]['points']
@@ -295,6 +299,21 @@ def main():
             else:
                 for key in ["d1_c", "d1_p", "d2_c", "d2_p", "d3_c", "d3_p"]:
                     if key in existing_data: widget_data[key] = existing_data[key]
+            
+            # --- Konstruktőri ---
+            c_data = get_json("https://api.jolpi.ca/ergast/f1/current/constructorStandings.json")
+            if not c_data or not c_data['MRData']['StandingsTable']['StandingsLists']:
+                 c_data = get_json(f"https://api.jolpi.ca/ergast/f1/{now.year-1}/constructorStandings.json") # Ha év eleje van, hozza a tavalyit
+            
+            if c_data and c_data['MRData']['StandingsTable']['StandingsLists']:
+                c_res = c_data['MRData']['StandingsTable']['StandingsLists'][0]['ConstructorStandings']
+                if len(c_res) > 0: widget_data['c1_c'], widget_data['c1_p'] = c_res[0]['Constructor']['name'][:3].upper(), c_res[0]['points']
+                if len(c_res) > 1: widget_data['c2_c'], widget_data['c2_p'] = c_res[1]['Constructor']['name'][:3].upper(), c_res[1]['points']
+                if len(c_res) > 2: widget_data['c3_c'], widget_data['c3_p'] = c_res[2]['Constructor']['name'][:3].upper(), c_res[2]['points']
+            else:
+                for key in ["c1_c", "c1_p", "c2_c", "c2_p", "c3_c", "c3_p"]:
+                    if key in existing_data: widget_data[key] = existing_data[key]
+                    
         except Exception: pass
 
     except Exception as e:
